@@ -1,4 +1,0 @@
-Thorn.egg-info/PKG-INFO
-Thorn.egg-info/SOURCES.txt
-Thorn.egg-info/dependency_links.txt
-Thorn.egg-info/top_level.txt
