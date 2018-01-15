@@ -2,7 +2,7 @@ from distutils.core import setup
 
 '''https://en.wikipedia.org/wiki/Thorn_(letter)'''
 
-setup(name='Thorn',
+setup(name='thorn',
       version='0.1',
       description='Python cryptocurrency trading platform',
       author='Thomas Gebhart',

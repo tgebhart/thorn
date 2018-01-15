@@ -2,7 +2,8 @@ API_CONFIG = {
     'base': 'https://poloniex.com/public',
     'call_limit': 6,
     'per': 'second',
-    'fee_structure': 'maker_taker'
+    'fee_structure': 'maker_taker',
+    'valid_periods': [300,900,1800,7200,14400,86400]
 }
 
 FEE_CONFIG = {
