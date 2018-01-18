@@ -16,7 +16,7 @@ class PoloniexPublic(PublicExchange):
     def send_check(self,payload={}):
         r = self.get(payload=payload)
         if 'error' in r:
-            print('Error in return_ticker: ', r)
+            print('Error in send_check: ', r)
             return None
         return r
 
