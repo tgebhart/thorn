@@ -1,10 +1,13 @@
 import time
 import datetime
 import os
+import json
 
 import requests
+import websocket
 
 from thorn.api.exchanges import PublicExchange
+from thorn.api.exchanges import Websocket
 from thorn.api.exchanges.bitmex import config
 
 class BitmexPublic(PublicExchange):
@@ -239,6 +242,115 @@ class BitmexPublic(PublicExchange):
                     'end_time': end_time}
 
         return self.send_check(payload=payload, endpoint='trade/bucketed')
+
+
+class BitmexSocket(Websocket):
+
+    def __init__(self, stream, symbol, onMessage=None):
+        self.valid_streams = config.WEBSOCKET_CONFIG['valid_streams']
+        if stream not in self.valid_streams:
+            raise AttributeError('stream {} not a valid stream'.format(stream))
+        self.base = config.WEBSOCKET_CONFIG['base']
+        self.symbol = symbol
+        args = str(stream) + ':' + str(symbol)
+        self.url = self.base + '?subscribe=' + args
+        self.wrap_onMessage = onMessage
+        om = self.choose_stream_function(stream)
+        super(BitmexSocket, self).__init__(self.url, onMessage = om,
+                                            onError = self.onError,
+                                            onOpen = self.onOpen,
+                                            onClose = self.onClose)
+
+    def on_message_order_book_l2(self, message, isBinary):
+        m = super(BitmexSocket, self).onMessage(message, isBinary)
+        if self.wrap_onMessage is not None:
+            self.wrap_onMessage(ws, self.translate_order_book_l2(m))
+        else:
+            return self.translate_order_book_l2(m)
+
+    def choose_stream_function(self, stream):
+        if stream == 'orderBookL2':
+            return self.on_message_order_book_l2
+
+    def translate_order_book_l2(self, message):
+        ret = []
+        header = {}
+        header['exchange'] = 'bitmex'
+        header['stream'] = 'depth_update'
+        try:
+            header['pair'] = self.symbol
+            header['timestamp'] = self.generate_timestamp()
+            data = message['data']
+            action = message['action']
+        except KeyError:
+            print('Unexpected stream format in translate_order_book_l2:', message)
+            return ret
+        if action == 'update':
+            for d in data:
+                r = {}
+                r['price_id'] = d['id']
+                r['quantity'] = d['size']
+                r['side'] = d['side'].lower()
+                ret.append({**header, **r})
+            return ret
+        if action == 'insert':
+            for d in data:
+                r = {}
+                r['price_id'] = d['id']
+                r['price'] = d['price']
+                r['quantity'] = d['size']
+                r['side'] = d['side'].lower()
+                ret.append({**header, **r})
+            return ret
+        if action == 'delete':
+            for d in data:
+                r = {}
+                r['price_id'] = d['id']
+                r['side'] = d['side'].lower()
+                r['quantity'] = 0
+                ret.append({**header, **r})
+            return ret
+
+    def onError(self, error):
+        print('Error in BitmexSocket: ', error)
+
+    def onOpen(self):
+        print('BitmexSocket: opened')
+
+    def onClose(self, wasClean, code, reason):
+        if wasClean:
+            print('BitmexSocket: clean close')
+        else:
+            print('BitmexSocket: unclean close', reason)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

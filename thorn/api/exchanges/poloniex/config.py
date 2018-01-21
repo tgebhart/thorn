@@ -6,6 +6,16 @@ API_CONFIG = {
     'valid_periods': [300,900,1800,7200,14400,86400]
 }
 
+
+WEBSOCKET_CONFIG = {
+    'base': 'wss://api.poloniex.com',
+    'push_freq': 1,
+    'push_per': 'second',
+    'disconnect_after': 24,
+    'disconnect_per': 'hours',
+    'valid_streams': ['ticker', 'trollbox', 'depth']
+}
+
 FEE_CONFIG = {
     'fee_structure': 'maker_taker',
     'default': '<600BTC',

@@ -3,10 +3,12 @@ import time
 import datetime
 
 from thorn.api.exchanges import BinancePublic
+from thorn.api.exchanges import BinanceSocket
 
 bapi = BinancePublic()
 PAIR = 'ETHBTC'
 CURRENCY = 'ETH'
+SOCKET_PAIR = 'bnbbtc'
 START = datetime.datetime(2018,1,1,12)
 END = datetime.datetime(2018,1,1,13)
 
@@ -31,8 +33,10 @@ class BinancePublicTest(unittest.TestCase):
         t = bapi.trades(PAIR)
         self.assertIsInstance(t, list)
 
+    # requires API Key for some reason (not indicated in docs)
     # def test_historical_trades(self):
     #     t = bapi.historical_trades(PAIR)
+    #     print(t)
     #     self.assertIsInstance(t, list)
 
     def test_agg_trades(self):
@@ -56,6 +60,20 @@ class BinancePublicTest(unittest.TestCase):
         self.assertIn('symbol', t)
 
 
+class BinanceWebsocketTest(unittest.TestCase):
+
+    def wrap_on_message(self, ws, message):
+        self.assertIn('exchange', message[0])
+        ws.close()
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    def test_init(self):
+        bws = BinanceSocket('depth', SOCKET_PAIR, on_message=self.wrap_on_message)
 
 
 

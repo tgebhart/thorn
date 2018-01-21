@@ -1,4 +1,5 @@
 from .PublicExchange import PublicExchange
+from .Websocket import Websocket
 
 from .poloniex.Poloniex import PoloniexPublic
 from .kraken.Kraken import KrakenPublic
@@ -13,3 +14,7 @@ from .etoro.Etoro import EtoroPublic
 from .bittrex.Bittrex import BittrexPublic
 from .gemini.Gemini import GeminiPublic
 from .cryptopia.Cryptopia import CryptopiaPublic
+
+from .binance.Binance import BinanceSocket
+from .bitmex.Bitmex import BitmexSocket
+from .poloniex.Poloniex import PoloniexSocket

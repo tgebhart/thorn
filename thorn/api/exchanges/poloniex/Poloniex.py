@@ -4,6 +4,7 @@ import datetime
 import requests
 
 from thorn.api.exchanges import PublicExchange
+from thorn.api.exchanges import Websocket
 from thorn.api.exchanges.poloniex import config
 
 class PoloniexPublic(PublicExchange):
@@ -79,3 +80,83 @@ class PoloniexPublic(PublicExchange):
         payload = {'command': 'returnLoanOrders',
                     'currency': currency}
         return self.send_check(payload=payload)
+
+
+class PoloniexSocket(Websocket):
+
+    def __init__(self, stream, symbol, on_message=None):
+        self.valid_streams = config.WEBSOCKET_CONFIG['valid_streams']
+        if stream not in self.valid_streams:
+            raise AttributeError('stream {} not a valid stream'.format(stream))
+        self.base = config.WEBSOCKET_CONFIG['base']
+        self.symbol = symbol
+        # args = str(stream) + ':' + str(symbol)
+        self.payload = {'event':'subscribe',
+                    'channel': str(symbol)}
+        self.url = self.base
+        self.wrap_on_message = on_message
+        om = self.choose_stream_function(stream)
+        super(PoloniexSocket, self).__init__(self.url, on_message = om,
+                                            on_error = self.on_error,
+                                            on_open = self.on_open,
+                                            on_close = self.on_close)
+
+    def on_message_depth(self, ws, message):
+        m = json.loads(message)
+        if self.wrap_on_message is not None:
+            self.wrap_on_message(ws, m)
+        else:
+            return self.translate_order_book_l2(m)
+
+    def choose_stream_function(self, stream):
+        if stream == 'depth':
+            return self.on_message_depth
+
+    def translate_depth(self, message):
+        ret = []
+        header = {}
+        header['exchange'] = 'bitmex'
+        header['stream'] = 'depth_update'
+        try:
+            header['pair'] = self.symbol
+            header['timestamp'] = self.generate_timestamp()
+            data = message['data']
+            action = message['action']
+        except KeyError:
+            print('Unexpected stream format in translate_order_book_l2:', message)
+            return ret
+        if action == 'update':
+            for d in data:
+                r = {}
+                r['price_id'] = d['id']
+                r['quantity'] = d['size']
+                r['side'] = d['side'].lower()
+                ret.append({**header, **r})
+            return ret
+        if action == 'insert':
+            for d in data:
+                r = {}
+                r['price_id'] = d['id']
+                r['price'] = d['price']
+                r['quantity'] = d['size']
+                r['side'] = d['side'].lower()
+                ret.append({**header, **r})
+            return ret
+        if action == 'delete':
+            for d in data:
+                r = {}
+                r['price_id'] = d['id']
+                r['side'] = d['side'].lower()
+                r['quantity'] = 0
+                ret.append({**header, **r})
+            return ret
+
+    def on_error(self, ws, error):
+        print('Error in PoloniexSocket: ', error)
+
+    def on_open(self, ws):
+        ws.send(json.dumps(self.payload))
+        print('PoloniexSocket: opened')
+
+    def on_close(self, ws):
+        print('PoloniexSocket: closed')
