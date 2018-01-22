@@ -5,6 +5,7 @@ import os
 import requests
 
 from thorn.api.exchanges import PublicExchange
+from thorn.api.exchanges import Websocket
 from thorn.api.exchanges.gemini import config
 
 class GeminiPublic(PublicExchange):
@@ -68,6 +69,76 @@ class GeminiPublic(PublicExchange):
                     'limit_auction_results': limit_auction_results,
                     'include_indicative': include_indicative}
         return self.send_check(payload=payload, endpoint=os.path.join('auction', str(pair), 'history'))
+
+
+class GeminiSocket(Websocket):
+
+    def __init__(self, symbol, on_message=None):
+        self.base = config.WEBSOCKET_CONFIG['base']
+        self.url = os.path.join(self.base, symbol)
+        self.symbol = symbol
+        self.wrap_on_message = on_message
+        super(GeminiSocket, self).__init__(self.url, on_message = self.on_message_depth,
+                                            on_error = self.on_error,
+                                            on_open = self.on_open,
+                                            on_close = self.on_close)
+
+    def on_message_depth(self, ws, message):
+        m = super(GeminiSocket, self).on_message(ws, message)
+        if self.wrap_on_message is not None:
+            self.wrap_on_message(ws, m)
+        else:
+            return self.translate_depth(m)
+
+    def translate_depth(self, message):
+        ret = []
+        header = {}
+        header['exchange'] = 'gemini'
+        header['stream'] = 'depth_update'
+        try:
+            header['pair'] = self.symbol
+            header['event_id'] = message['eventId']
+            header['timestamp'] = self.generate_timestamp()
+            data = message['data']
+            events = message['events']
+        except KeyError:
+            print('Unexpected stream format in translate_order_book_l2:', message)
+            return ret
+        if action == 'update':
+            for d in data:
+                r = {}
+                r['price_id'] = d['id']
+                r['quantity'] = d['size']
+                r['side'] = d['side'].lower()
+                ret.append({**header, **r})
+            return ret
+        if action == 'insert':
+            for d in data:
+                r = {}
+                r['price_id'] = d['id']
+                r['price'] = d['price']
+                r['quantity'] = d['size']
+                r['side'] = d['side'].lower()
+                ret.append({**header, **r})
+            return ret
+        if action == 'delete':
+            for d in data:
+                r = {}
+                r['price_id'] = d['id']
+                r['side'] = d['side'].lower()
+                r['quantity'] = 0
+                ret.append({**header, **r})
+            return ret
+
+    def on_error(self, ws, error):
+        print('Error in GeminiSocket: ', error)
+
+    def on_open(self, ws):
+        print('GeminiSocket: opened')
+
+    def on_close(self, ws):
+        print('GeminiSocket: closed')
+
 
 
 

@@ -8,7 +8,7 @@ API_CONFIG = {
 
 
 WEBSOCKET_CONFIG = {
-    'base': 'wss://api.poloniex.com',
+    'base': 'wss://api2.poloniex.com',
     'push_freq': 1,
     'push_per': 'second',
     'disconnect_after': 24,

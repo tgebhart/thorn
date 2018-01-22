@@ -18,3 +18,4 @@ from .cryptopia.Cryptopia import CryptopiaPublic
 from .binance.Binance import BinanceSocket
 from .bitmex.Bitmex import BitmexSocket
 from .poloniex.Poloniex import PoloniexSocket
+from .gemini.Gemini import GeminiSocket

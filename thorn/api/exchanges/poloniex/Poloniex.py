@@ -1,5 +1,6 @@
 import time
 import datetime
+import json
 
 import requests
 
@@ -89,11 +90,8 @@ class PoloniexSocket(Websocket):
         if stream not in self.valid_streams:
             raise AttributeError('stream {} not a valid stream'.format(stream))
         self.base = config.WEBSOCKET_CONFIG['base']
-        self.symbol = symbol
-        # args = str(stream) + ':' + str(symbol)
-        self.payload = {'event':'subscribe',
-                    'channel': str(symbol)}
         self.url = self.base
+        self.symbol = symbol
         self.wrap_on_message = on_message
         om = self.choose_stream_function(stream)
         super(PoloniexSocket, self).__init__(self.url, on_message = om,
@@ -115,7 +113,7 @@ class PoloniexSocket(Websocket):
     def translate_depth(self, message):
         ret = []
         header = {}
-        header['exchange'] = 'bitmex'
+        header['exchange'] = 'poloniex'
         header['stream'] = 'depth_update'
         try:
             header['pair'] = self.symbol
@@ -155,7 +153,8 @@ class PoloniexSocket(Websocket):
         print('Error in PoloniexSocket: ', error)
 
     def on_open(self, ws):
-        ws.send(json.dumps(self.payload))
+        payload = {'command':'subscribe', 'channel': str(self.symbol)}
+        ws.send(json.dumps(payload))
         print('PoloniexSocket: opened')
 
     def on_close(self, ws):

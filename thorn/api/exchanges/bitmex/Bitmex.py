@@ -246,25 +246,26 @@ class BitmexPublic(PublicExchange):
 
 class BitmexSocket(Websocket):
 
-    def __init__(self, stream, symbol, onMessage=None):
+    def __init__(self, stream, symbol, on_message=None):
         self.valid_streams = config.WEBSOCKET_CONFIG['valid_streams']
         if stream not in self.valid_streams:
             raise AttributeError('stream {} not a valid stream'.format(stream))
         self.base = config.WEBSOCKET_CONFIG['base']
         self.symbol = symbol
-        args = str(stream) + ':' + str(symbol)
-        self.url = self.base + '?subscribe=' + args
-        self.wrap_onMessage = onMessage
+        self.args = str(stream) + ':' + str(symbol)
+        # self.url = self.base + '?subscribe=' + args
+        self.url = self.base
+        self.wrap_on_message = on_message
         om = self.choose_stream_function(stream)
-        super(BitmexSocket, self).__init__(self.url, onMessage = om,
-                                            onError = self.onError,
-                                            onOpen = self.onOpen,
-                                            onClose = self.onClose)
+        super(BitmexSocket, self).__init__(self.url, on_message = om,
+                                            on_error = self.on_error,
+                                            on_open = self.on_open,
+                                            on_close = self.on_close)
 
-    def on_message_order_book_l2(self, message, isBinary):
-        m = super(BitmexSocket, self).onMessage(message, isBinary)
-        if self.wrap_onMessage is not None:
-            self.wrap_onMessage(ws, self.translate_order_book_l2(m))
+    def on_message_order_book_l2(self, ws, message):
+        m = super(BitmexSocket, self).on_message(ws, message)
+        if self.wrap_on_message is not None:
+            self.wrap_on_message(ws, self.translate_order_book_l2(m))
         else:
             return self.translate_order_book_l2(m)
 
@@ -311,17 +312,16 @@ class BitmexSocket(Websocket):
                 ret.append({**header, **r})
             return ret
 
-    def onError(self, error):
+    def on_error(self, ws, error):
         print('Error in BitmexSocket: ', error)
 
-    def onOpen(self):
+    def on_open(self, ws):
+        payload = {'op': 'subscribe', 'args': [self.args]}
+        ws.send(json.dumps(payload))
         print('BitmexSocket: opened')
 
-    def onClose(self, wasClean, code, reason):
-        if wasClean:
-            print('BitmexSocket: clean close')
-        else:
-            print('BitmexSocket: unclean close', reason)
+    def on_close(self, ws):
+        print('BitmexSocket: closed')
 
 
 
