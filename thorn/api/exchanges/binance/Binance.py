@@ -6,6 +6,8 @@ import json
 import requests
 import websocket
 
+from confluent_kafka import Producer
+
 from thorn.api.exchanges import PublicExchange
 from thorn.api.exchanges import Websocket
 from thorn.api.exchanges.binance import config
@@ -457,7 +459,7 @@ class BinanceSocket(Websocket):
     def on_message_depth(self, ws, message):
         m = json.loads(message)
         if self.wrap_on_message is not None:
-            self.wrap_on_message(ws, self.translate_depth(m))
+            self.wrap_on_message(ws, m)
         else:
             return self.translate_depth(m)
 

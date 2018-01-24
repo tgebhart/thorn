@@ -27,8 +27,6 @@ class Websocket(object):
                                         on_error=on_error,
                                         on_close=on_close)
 
-        self.ws.run_forever()
-
 
 
 
@@ -46,3 +44,6 @@ class Websocket(object):
 
     def generate_timestamp(self):
         return datetime.datetime.utcnow()
+
+    def run_forever(self):
+        self.ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})
