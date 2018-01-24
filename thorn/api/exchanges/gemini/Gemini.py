@@ -73,7 +73,7 @@ class GeminiPublic(PublicExchange):
 
 class GeminiSocket(Websocket):
 
-    def __init__(self, symbol, on_message=None):
+    def __init__(self, stream, symbol, on_message=None):
         self.base = config.WEBSOCKET_CONFIG['base']
         self.url = os.path.join(self.base, symbol)
         self.symbol = symbol

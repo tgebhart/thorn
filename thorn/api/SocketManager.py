@@ -26,13 +26,34 @@ class SocketManager(object):
 
     def manage_binance(self):
 
-        p = Producer({'bootstrap.servers': ",".join(self.broker_string)})
+        p = Producer({'bootstrap.servers': self.broker_string})
 
         def on_message(ws, message):
-            # print('on_message_def', message)
             p.produce('binance_socket', json.dumps(message).encode('utf-8'))
 
         s = BinanceSocket('depth','bnbbtc', on_message=on_message)
+        s.run_forever()
+        p.flush()
+
+    def manage_bitmex(self):
+
+        p = Producer({'bootstrap.servers': self.broker_string})
+
+        def on_message(ws, message):
+            p.produce('bitmex_socket', json.dumps(message).encode('utf-8'))
+
+        s = BitmexSocket('depth', 'XBTUSD', on_message=on_message)
+        s.run_forever()
+        p.flush()
+
+    def manage_gemini(self):
+
+        p = Producer({'bootstrap.servers': self.broker_string})
+
+        def on_message(ws, message):
+            p.produce('gemini_socket', json.dumps(message).encode('utf-8'))
+
+        s = GeminiSocket('depth', 'BTCUSD', on_message=on_message)
         s.run_forever()
         p.flush()
 

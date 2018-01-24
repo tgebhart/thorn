@@ -9,26 +9,14 @@ from confluent_kafka import Consumer, KafkaError
 from thorn.api import SocketManager
 sm = SocketManager()
 
-class sThread(threading.Thread):
-   def __init__(self, threadID, name, counter, fun):
-      threading.Thread.__init__(self)
-      self.threadID = threadID
-      self.name = name
-      self.counter = counter
-      self.fun = fun
+class FuncThread(threading.Thread):
+    def __init__(self, target, *args):
+        self._target = target
+        self._args = args
+        threading.Thread.__init__(self)
 
-   def run(self):
-      print("Starting " + self.name)
-      self.fun()
-      print("Exiting " + self.name)
-
-def print_time(threadName, counter, delay):
-   while counter:
-      if 0:
-         threadName.exit()
-      time.sleep(delay)
-      print("%s: %s" % (threadName, time.ctime(time.time())))
-      counter -= 1
+    def run(self):
+        self._target(*self._args)
 
 
 class SocketManagerTest(unittest.TestCase):
@@ -41,10 +29,41 @@ class SocketManagerTest(unittest.TestCase):
 
     def test_binance(self):
         # sm.manage_binance()
-        thread1 = sThread(1, "Thread1", 1, sm.manage_binance)
-        thread2 = sThread(2, "Thread2", 2, consume('binance_socket'))
+        def pass_test(m):
+            if 'e' in m:
+                return True
+            return False
 
-def consume(topic):
+        t1 = threading.Thread(target=sm.manage_binance, args=())
+        t1.daemon = True
+        t1.start()
+        consume('binance_socket', pass_test)
+
+    def test_bitmex(self):
+
+        def pass_test(m):
+            if 'table' in m:
+                return True
+            return False
+
+        t1 = threading.Thread(target=sm.manage_bitmex, args=())
+        t1.daemon = True
+        t1.start()
+        consume('bitmex_socket', pass_test)
+
+    def test_gemini(self):
+
+        def pass_test(m):
+            if 'type' in m:
+                return True
+            return False
+
+        t1 = threading.Thread(target=sm.manage_gemini, args=())
+        t1.daemon = True
+        t1.start()
+        consume('gemini_socket', pass_test)
+
+def consume(topic, pass_test):
     c = Consumer({'bootstrap.servers': '0', 'group.id': 'mygroup',
                   'default.topic.config': {'auto.offset.reset': 'smallest'}})
     c.subscribe([topic])
@@ -53,12 +72,9 @@ def consume(topic):
         msg = c.poll()
         if not msg.error():
             print('Received message: %s' % msg.value().decode('utf-8'))
-            print('before mfj')
-            mfj = json.loads(msg.value().decode('utf-8'))
-            print(mfj)
-            if 'e' in mfj:
-                print('test passed')
-                running = False
+            m = json.loads(msg.value().decode('utf-8'))
+            running = not pass_test(m)
+            print('test passed')
         elif msg.error().code() != KafkaError._PARTITION_EOF:
             print(msg.error())
             running = False

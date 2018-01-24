@@ -15,6 +15,30 @@ WEBSOCKET_CONFIG = {
     'push_per': 'second',
     'disconnect_after': 24,
     'disconnect_per': 'hours',
+    'stream_dictionary' : {
+                    "announcement":"announcement",
+                    "chat":"chat",
+                    "connected":"connected",
+                    "instrument":"instrument",
+                    "insurance":"insurance",
+                    "liquidation":"liquidation",
+                    "depth":"orderBookL2",
+                    "orderBook10":"orderBook10",
+                    "publicNotifications":"publicNotifications",
+                    "quote":"quote",
+                    "quoteBin1m":"quoteBin1m",
+                    "settlement":"settlement",
+                    "trade":"trade",
+                    "tradeBin1m":"tradeBin1m",
+                    "affiliate":"affiliate",
+                    "execution":"execution",
+                    "order":"order",
+                    "margin":"margin",
+                    "position":"position",
+                    "privateNotifications":"privateNotifications",
+                    "transact":"transact",
+                    "wallet":"wallet"
+                    },
     'valid_streams': ["announcement", # Site announcements
                     "chat",        # Trollbox chat
                     "connected",   # Statistics of connected users/bots
@@ -28,7 +52,7 @@ WEBSOCKET_CONFIG = {
                     "quoteBin1m",  # 1-minute quote bins
                     "settlement",  # Settlements
                     "trade",       # Live trades
-                    "tradeBin1m"  # 1-minute ticker bins
+                    "tradeBin1m",  # 1-minute ticker bins
                     "affiliate",   # Affiliate status, such as total referred users & payout %
                     "execution",   # Individual executions; can be multiple per order
                     "order",       # Live updates on your orders

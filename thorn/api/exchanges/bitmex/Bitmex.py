@@ -248,15 +248,17 @@ class BitmexSocket(Websocket):
 
     def __init__(self, stream, symbol, on_message=None):
         self.valid_streams = config.WEBSOCKET_CONFIG['valid_streams']
-        if stream not in self.valid_streams:
-            raise AttributeError('stream {} not a valid stream'.format(stream))
+        self.stream_dict = config.WEBSOCKET_CONFIG['stream_dictionary']
+        if stream in self.stream_dict:
+            self.stream = self.stream_dict[stream]
+        else:
+            self.stream = stream
         self.base = config.WEBSOCKET_CONFIG['base']
         self.symbol = symbol
-        self.args = str(stream) + ':' + str(symbol)
-        # self.url = self.base + '?subscribe=' + args
+        self.args = str(self.stream) + ':' + str(self.symbol)
         self.url = self.base
         self.wrap_on_message = on_message
-        om = self.choose_stream_function(stream)
+        om = self.choose_stream_function(self.stream)
         super(BitmexSocket, self).__init__(self.url, on_message = om,
                                             on_error = self.on_error,
                                             on_open = self.on_open,
@@ -265,7 +267,7 @@ class BitmexSocket(Websocket):
     def on_message_order_book_l2(self, ws, message):
         m = super(BitmexSocket, self).on_message(ws, message)
         if self.wrap_on_message is not None:
-            self.wrap_on_message(ws, self.translate_order_book_l2(m))
+            self.wrap_on_message(ws, m)
         else:
             return self.translate_order_book_l2(m)
 
