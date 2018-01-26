@@ -29,7 +29,8 @@ class SocketManager(object):
         p = Producer({'bootstrap.servers': self.broker_string})
 
         def on_message(ws, message):
-            p.produce('binance_socket', json.dumps(message).encode('utf-8'))
+            p.produce(config.SOCKET_MANAGER_CONFIG['binance_stream_name'],
+                        json.dumps(message).encode('utf-8'))
 
         s = BinanceSocket('depth','bnbbtc', on_message=on_message)
         s.run_forever()
@@ -40,7 +41,8 @@ class SocketManager(object):
         p = Producer({'bootstrap.servers': self.broker_string})
 
         def on_message(ws, message):
-            p.produce('bitmex_socket', json.dumps(message).encode('utf-8'))
+            p.produce(config.SOCKET_MANAGER_CONFIG['bitmex_stream_name'],
+                        json.dumps(message).encode('utf-8'))
 
         s = BitmexSocket('depth', 'XBTUSD', on_message=on_message)
         s.run_forever()
@@ -51,7 +53,8 @@ class SocketManager(object):
         p = Producer({'bootstrap.servers': self.broker_string})
 
         def on_message(ws, message):
-            p.produce('gemini_socket', json.dumps(message).encode('utf-8'))
+            p.produce(config.SOCKET_MANAGER_CONFIG['gemini_stream_name'],
+                        json.dumps(message).encode('utf-8'))
 
         s = GeminiSocket('depth', 'BTCUSD', on_message=on_message)
         s.run_forever()
