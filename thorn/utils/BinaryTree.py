@@ -317,9 +317,11 @@ class BinaryTree(object):
                 node = node.parent
         return retlst
 
-    def preorder(self, node, retlst=None):
+    def preorder(self, node=None, retlst=None):
         if retlst is None:
             retlst = []
+        if node is None:
+            node = self.root
         if len(node.quantities) > 0:
             retlst.append([node.key.price, *node.quantities])
         else:
@@ -330,9 +332,11 @@ class BinaryTree(object):
             retlst = self.preorder(node.right_child, retlst)
         return retlst
 
-    def inorder(self, node, retlst=None):
+    def inorder(self, node=None, retlst=None):
         if retlst is None:
             retlst = []
+        if node is None:
+            node = self.root
         if node.left_child:
             retlst = self.inorder(node.left_child, retlst)
         if len(node.quantities) > 0:
@@ -343,9 +347,11 @@ class BinaryTree(object):
             retlst = self.inorder(node.right_child, retlst)
         return retlst
 
-    def postorder(self, node, retlst=None):
+    def postorder(self, node=None, retlst=None):
         if retlst is None:
             retlst = []
+        if node is None:
+            node = self.root
         if node.left_child:
             retlst = self.postorder(node.left_child, retlst)
         if node.right_child:
@@ -511,6 +517,20 @@ class BinaryTree(object):
         else:
             return start_node.out()
 
+    def max(self, start_node=None):
+        if start_node is None:
+            io = self.inorder(self.root)
+        else:
+            io = self.inorder(start_node)
+        return io[len(io)-1]
+
+    def min(self, start_node=None):
+        if start_node is None:
+            io = self.inorder(self.root)
+        else:
+            io = self.inorder(start_node)
+        return io[0]
+
 
 def test():
     def random_data_generator(count, max_val):
@@ -557,7 +577,7 @@ def test():
     sanity_check(tree=a)
 
     print("check not empty tree creation")
-    seq = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12)]
+    seq = [(3, 4), (1, 2), (5, 6), (7, 8), (9, 10), (11, 12)]
     seq_copy = list(seq)
     #random.shuffle(seq)
     b = BinaryTree(seq)
@@ -566,6 +586,17 @@ def test():
 
     print("check that inorder traversal on an AVL tree (and on a binary search tree in the whole) will return prices from the underlying set in order")
     assert (b.as_list(3) == b.as_list(1))
+
+    print('preorder')
+    print(b.preorder(b.root))
+    print('postorder')
+    print(b.postorder(b.root))
+    print('inorder')
+    print(b.inorder(b.root))
+    print('min')
+    print(b.min())
+    print('max')
+    print(b.max())
 
     random.shuffle(seq)
     for x in seq:

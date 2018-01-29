@@ -3,7 +3,7 @@ import json
 from confluent_kafka import Consumer, KafkaError
 
 from thorn.orderbooks import OrderBook
-from thorn.api import BinancePublic
+from thorn.api.exchanges import BinancePublic
 from thorn.api import config as socket_config
 from thorn import config as global_config
 
