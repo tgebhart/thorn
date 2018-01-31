@@ -261,7 +261,7 @@ class BinaryTree(object):
         if self.root is not None:
             self.root.balance(self)
 
-    def insert(self, price, quantity):
+    def insert(self, price, quantity, replace=False):
         if self.root is None:
             # If nothing in tree
             self.root = Node(price, quantities=[quantity])
@@ -272,7 +272,10 @@ class BinaryTree(object):
                 self.element_count += 1
                 self.add_as_child(self.root, Node(price, quantities=[quantity]))
             else:
-                n.quantities.append(quantity)
+                if replace:
+                    n.quantities = [quantity]
+                else:
+                    n.quantities.append(quantity)
 
     def add_as_child(self, parent_node, child_node):
         if child_node.key < parent_node.key:

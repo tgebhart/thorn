@@ -15,3 +15,8 @@ API_MANAGER_CONFIG = {
         'fetchTicker': '_ticker'
     }
 }
+
+KEY_CONFIG = {
+    'api_key_location': '~',
+    'api_key_name': 'api_keys.csv',
+}

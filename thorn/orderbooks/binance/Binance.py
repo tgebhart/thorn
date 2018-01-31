@@ -2,12 +2,13 @@ import json
 
 from confluent_kafka import Consumer, KafkaError
 
-from thorn.orderbooks import OrderBook
 from thorn.api.exchanges import BinancePublic
 from thorn.api import config as socket_config
 from thorn import config as global_config
+from thorn.utils import BinaryTree
 
-class BinanceBook(OrderBook):
+
+class BinanceBook(BinaryTree):
 
     def __init__(self, pair):
         self.pair = pair

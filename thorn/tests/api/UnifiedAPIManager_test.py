@@ -46,7 +46,8 @@ class UnifiedAPIManagerTest(unittest.TestCase):
     def test_manage_order_book(self):
         exchanges = [ccxt.binance(), ccxt.gemini(), ccxt.bitmex()]
         loop = asyncio.get_event_loop()
-        uam = UnifiedAPIManager(SYMBOL, 'fetchOrderBook', exchanges, 5000, loop=loop)
+        uam = UnifiedAPIManager(SYMBOL, 'fetchOrderBook', exchanges, 5000)
+        loop.run_until_complete(uam.filter_exchanges())
 
         def pass_test(m):
             if 'bids' in m:
@@ -55,7 +56,7 @@ class UnifiedAPIManagerTest(unittest.TestCase):
 
         t2 = ConsumeThread(SYMBOL.replace('/','_')+'_order_book', pass_test)
         t2.start()
-        uam.manage(stop_at=datetime.datetime.utcnow() + datetime.timedelta(seconds=2))
+        loop.run_until_complete(uam.manage(stop_at=datetime.datetime.utcnow() + datetime.timedelta(seconds=2)))
         t2.join()
         self.assertEqual(2+2, 4)
 
@@ -63,7 +64,8 @@ class UnifiedAPIManagerTest(unittest.TestCase):
     def test_manage_ticker(self):
         exchanges = [ccxt.binance(), ccxt.gemini(), ccxt.bitmex()]
         loop = asyncio.get_event_loop()
-        uam = UnifiedAPIManager(SYMBOL, 'fetchTicker', exchanges, 5000, loop=loop)
+        uam = UnifiedAPIManager(SYMBOL, 'fetchTicker', exchanges, 5000)
+        loop.run_until_complete(uam.filter_exchanges())
 
         def pass_test(m):
             if 'high' in m:
@@ -72,7 +74,7 @@ class UnifiedAPIManagerTest(unittest.TestCase):
 
         t2 = ConsumeThread(SYMBOL.replace('/','_')+'_ticker', pass_test)
         t2.start()
-        uam.manage(stop_at=datetime.datetime.utcnow() + datetime.timedelta(seconds=2))
+        loop.run_until_complete(uam.manage(stop_at=datetime.datetime.utcnow() + datetime.timedelta(seconds=2)))
         t2.join()
         self.assertEqual(2+2, 4)
 

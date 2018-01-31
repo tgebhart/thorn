@@ -36,61 +36,56 @@ class UnifiedAPIManager(object):
         self.symbol = symbol
         self.function = function
         self.loop = asyncio.get_event_loop() if loop is None else loop
+        self.exchanges = exchanges
         # self.exchanges = self.filter_exchanges(exchanges, self.symbol, self.function)
         self.delay = delay
         self.p = Producer({'bootstrap.servers': self.broker_string})
         self.stream_suffixes = config.API_MANAGER_CONFIG['function_stream_suffixes']
 
-    async def filter_exchanges(self, exchanges, symbol, function):
+    async def filter_exchanges(self):
         ret = []
-        for exchange in exchanges:
-            if exchange.has.get(function, False):
+        for exchange in self.exchanges:
+            if exchange.has.get(self.function, False):
                 markets = await exchange.load_markets()
-                if symbol in markets:
+                if self.symbol in markets:
                     ret.append(exchange)
         if len(ret) == 0:
             raise AttributeError('filter_exchanges error: no exchanges found with function implemented')
         self.exchanges = ret
 
-    async def fetch(self, function, symbol, params=None):
-        if params is None:
-            return await function(symbol)
-        else:
-            return await function(symbol, params)
-
-    async def manage(self, stop_at=None, params=None):
+    async def manage(self, stop_at=None, params={}):
         if self.function == 'fetchOrderBook':
             if stop_at is not None:
                 t = datetime.datetime.utcnow()
                 while t < stop_at:
-                    self.manage_fetch_order_book(self.symbol, self.exchanges, params=params)
+                    await self.manage_fetch_order_book(self.symbol, self.exchanges, params=params)
                     t = datetime.datetime.utcnow()
                     time.sleep(self.delay / 1e3)
             else:
                 while True:
-                    self.manage_fetch_order_book(self.symbol, self.exchanges, params=params)
+                    await self.manage_fetch_order_book(self.symbol, self.exchanges, params=params)
                     time.sleep(self.delay / 1e3)
 
         if self.function == 'fetchTicker':
             if stop_at is not None:
                 t = datetime.datetime.utcnow()
                 while t < stop_at:
-                    self.manage_fetch_ticker(self.symbol, self.exchanges, params=params)
+                    await self.manage_fetch_ticker(self.symbol, self.exchanges, params=params)
                     t = datetime.datetime.utcnow()
                     time.sleep(self.delay / 1e3)
             else:
                 while True:
-                    self.manage_fetch_ticker(self.symbol, self.exchanges, params=params)
+                    await self.manage_fetch_ticker(self.symbol, self.exchanges, params=params)
                     time.sleep(self.delay / 1e3)
 
-    async def manage_fetch_order_book(self, symbol, exchanges, params=None):
+    async def manage_fetch_order_book(self, symbol, exchanges, params={}):
         for exchange in exchanges:
-            m = self.loop.run_until_complete(self.fetch(exchange.fetch_order_book, symbol, params=params))
+            m = await exchange.fetch_order_book(symbol)
             m['exchange'] = exchange.id
             self.p.produce(symbol.replace('/', '_')+self.stream_suffixes['fetchOrderBook'], json.dumps(m))
 
-    async def manage_fetch_ticker(self, symbol, exchanges, params=None):
+    async def manage_fetch_ticker(self, symbol, exchanges, params={}):
         for exchange in exchanges:
-            m = self.loop.run_until_complete(self.fetch(exchange.fetch_ticker, symbol, params=params))
+            m = await exchange.fetch_ticker(symbol)
             m['exchange'] = exchange.id
             self.p.produce(symbol.replace('/', '_')+self.stream_suffixes['fetchTicker'], json.dumps(m))
