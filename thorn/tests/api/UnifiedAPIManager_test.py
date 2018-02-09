@@ -15,7 +15,6 @@ from thorn.api import UnifiedAPIManager
 
 class ManageThread(threading.Thread):
     def __init__(self, symbol, function, exchanges, delay, loop=None):
-        # loop = asyncio.get_event_loop()
         uam = UnifiedAPIManager(symbol, function, exchanges, delay, loop=loop)
         print(uam.function)
         self.uam = uam

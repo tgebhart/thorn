@@ -22,8 +22,7 @@ class UnifiedAPIManager(object):
         - brokers (list, optional): broker information for Producer. Defaults to
             config settings.
 
-        Returns:
-            UnifiedAPIManager instance.
+        Returns: UnifiedAPIManager instance.
 
         '''
         self.brokers = brokers
@@ -44,6 +43,16 @@ class UnifiedAPIManager(object):
         self.stream_suffixes = config.API_MANAGER_CONFIG['function_stream_suffixes']
 
     async def filter_exchanges(self):
+        '''Given an instantiated list of exchanges, a ccxt universal function,
+        and a symbol, filter the exchanges that are have a market w.r.t. the
+        symbol and ccxt provides functionality for the instantiated function.
+
+        ASYNC
+
+        Returns: None.
+
+        Raises: AttributeError.
+        '''
         ret = []
         for exchange in self.exchanges:
             if exchange.has.get(self.function, False):
@@ -55,6 +64,20 @@ class UnifiedAPIManager(object):
         self.exchanges = ret
 
     async def manage(self, stop_at=None, params={}):
+        '''Wrapper function that manages the publication of market data to
+        designated streams. Depending on the instantiated function, fetch
+        data related to that function and then sleep according to `self.delay`.
+
+        ASYNC
+
+        Args:
+            - stop_at (datetime.datetime, optional): Stop managing at this time.
+                If None (default), function will continue running indefinitely.
+            - params (dict, optional): An optional list of parameters to be sent
+                in the API fetch.
+
+        Returns: None.
+        '''
         if self.function == 'fetchOrderBook':
             if stop_at is not None:
                 t = datetime.datetime.utcnow()
@@ -80,12 +103,46 @@ class UnifiedAPIManager(object):
                     time.sleep(self.delay / 1e3)
 
     async def manage_fetch_order_book(self, symbol, exchanges, params={}):
+        '''Primary method for managing function `fetchOrderBook`. Awaits for a
+        get request from each exchange's API using the unified `fetch_order_book`
+        method. Upon response, add the exchange id to the json and then dump into
+        the Kafka stream determined by `self.stream_suffixes['fetchOrderBook']`.
+
+        ASYNC
+
+        Args:
+            - symbol (str): The symbol from which to fetch data.
+            - exchanges (list[ccxt.exchange]): The list of exchanges whose
+                `fetch_order_book` equivalent method will be called to obtain
+                data on `symbol`. This list should be filtered via `filter_exchanges`
+                prior to use as an argument.
+            - params (dict, optional): The optional API request paramters to be sent.
+
+        Returns: None.
+        '''
         for exchange in exchanges:
             m = await exchange.fetch_order_book(symbol)
             m['exchange'] = exchange.id
             self.p.produce(symbol.replace('/', '_')+self.stream_suffixes['fetchOrderBook'], json.dumps(m))
 
     async def manage_fetch_ticker(self, symbol, exchanges, params={}):
+        '''Primary method for managing function `fetchTicker`. Awaits for a
+        get request from each exchange's API using the unified `fetch_ticker`
+        method. Upon response, add the exchange id to the json and then dump into
+        the Kafka stream determined by `self.stream_suffixes['fetchTicker']`.
+
+        ASYNC
+
+        Args:
+            - symbol (str): The symbol from which to fetch data.
+            - exchanges (list[ccxt.exchange]): The list of exchanges whose
+                `fetch_order_book` equivalent method will be called to obtain
+                data on `symbol`. This list should be filtered via `filter_exchanges`
+                prior to use as an argument.
+            - params (dict, optional): The optional API request paramters to be sent.
+
+        Returns: None.
+        '''
         for exchange in exchanges:
             m = await exchange.fetch_ticker(symbol)
             m['exchange'] = exchange.id
