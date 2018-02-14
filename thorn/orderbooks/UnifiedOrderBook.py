@@ -89,7 +89,7 @@ class UnifiedOrderBook(BinaryTree):
                 running = False
         self.c.close()
 
-    def monitor_full_book_stream(self, stop_at=None):
+    def monitor_full_book_stream(self, on_message=None, stop_at=None):
         '''Function that monitors Kafka streams containing full order book
         information. That is, responses of the unified API method `fetch_order_book`.
         This function uses the class consumer to read a stream dictated by
@@ -98,13 +98,18 @@ class UnifiedOrderBook(BinaryTree):
         `stop_at` is set.
 
         Args:
-            - stop_at (datetime.datetime): The time at which to stop monitoring
-                the full order book.
+            - on_message (function, optional): A function to call when a message
+                is read from the Kafka stream. Should accept a single argument
+                `m`: a json message picked up from the Kafka stream.
+             - stop_at (datetime.datetime, optional): The time at which to stop
+                monitoring the full order book.
 
         Returns: None.
         '''
         if stop_at is None:
             stop_at = datetime.datetime.utcnow() + datetime.timedelta(days=73000)
+        if on_message is None:
+            on_message = self.update_full_book
         topicstr = self.symbol.replace('/','_') + self.api_stream_suffixes['fetchOrderBook']
         self.c.subscribe([topicstr])
         running = True
@@ -113,8 +118,7 @@ class UnifiedOrderBook(BinaryTree):
             if not msg.error():
                 m = json.loads(msg.value().decode('utf-8'))
                 if 'exchange' in m and m['exchange'] == self.exchange.id:
-                    self.update_full_book(m)
-                    self.output_terminal()
+                    on_message(m)
             elif msg.error().code() != KafkaError._PARTITION_EOF:
                 print(msg.error())
                 running = False

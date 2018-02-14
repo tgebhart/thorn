@@ -36,10 +36,8 @@ class UnifiedAPIManager(object):
         self.function = function
         self.loop = asyncio.get_event_loop() if loop is None else loop
         self.exchanges = exchanges
-        # self.exchanges = self.filter_exchanges(exchanges, self.symbol, self.function)
         self.delay = delay
         self.p = Producer(**{'bootstrap.servers': self.broker_string, 'group.id': 'mygroup'})
-        print(self.p)
         self.stream_suffixes = config.API_MANAGER_CONFIG['function_stream_suffixes']
 
     async def filter_exchanges(self):

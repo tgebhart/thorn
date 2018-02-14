@@ -8,6 +8,7 @@ import asyncio
 import ccxt.async as ccxt
 
 from confluent_kafka import Consumer, KafkaError
+from thorn.api import config
 
 SYMBOL = 'ETH/BTC'
 
@@ -79,8 +80,12 @@ class UnifiedAPIManagerTest(unittest.TestCase):
 
 
 def consume(topic, pass_test):
-    c = Consumer({'bootstrap.servers': '0', 'group.id': 'mygroup',
-                  'default.topic.config': {'auto.offset.reset': 'smallest'}})
+    brokers = config.SOCKET_MANAGER_CONFIG['brokers']
+    if len(brokers) > 1:
+        broker_string = ",".join(brokers)
+    else:
+        broker_string = brokers[0]
+    c = Consumer(**{'bootstrap.servers': broker_string, 'group.id': 'mygroup'})
     c.subscribe([topic])
     running = True
     while running:

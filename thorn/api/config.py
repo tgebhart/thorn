@@ -1,5 +1,6 @@
 SOCKET_MANAGER_CONFIG = {
-    'brokers' : ['184.73.70.132', '34.224.29.74'],
+    # 'brokers' : ['54.146.190.128'],
+    'brokers' : ['0'],
     'function_stream_suffixes': {
         'orderBookUpdate': '_order_book_update'
     },
@@ -9,7 +10,8 @@ SOCKET_MANAGER_CONFIG = {
 }
 
 API_MANAGER_CONFIG = {
-    'brokers': ['184.73.70.132', '34.224.29.74'],
+    # 'brokers': ['54.146.190.128'],
+    'brokers': ['0'],
     'function_stream_suffixes': {
         'fetchOrderBook': '_order_book',
         'fetchTicker': '_ticker'

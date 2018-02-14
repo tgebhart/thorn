@@ -1,0 +1,5 @@
+Things to change on each broker after running Confluent Kafka on new VPC:
+  - uncomment active.listeners in server.properties and add IP of server
+  - change auto.topic.creation (or whatever) to true
+  - stop server (sudo ./bin/kafka-server-stop)
+  - start server (sudo ./bin/kafka-server-start etc/kafka/server.properties &)
