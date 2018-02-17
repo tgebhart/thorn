@@ -18,7 +18,6 @@ from thorn import config
 from thorn.utils import instantiate_exchanges, create_diff_object
 
 FUNCTION = 'fetchOrderBook'
-DELAY = 1000
 FULL_DB_SUFFIX = '_order_book_snapshots'
 UPDATE_DB_SUFFIX = '_second_updates'
 
@@ -71,48 +70,57 @@ def run(symbol, exchanges={}, stop_at=None):
             session.execute(config.CASSANDRA['second_update_keyspace']['query'])
             session.set_keyspace(config.CASSANDRA['second_update_keyspace']['name'])
 
-    def on_message(m):
-        print('Got message: ', m)
-        exchange = m['exchange']
-        book = order_books[exchange]
-        seq = seqs[exchange]
-        seqs[exchange] += 1
+    def on_message(m, book):
+        '''Function passed to UnifiedOrderBook class that will be executed each
+        time the UnifiedOrderBook reads an order book message from Kafka. If the
+        message is about the exchange of the instantiated order book, this
+        function will compute the diff on the order book from the previous
+        second's complete book. This diff is then sent to the DB for storage.
 
-        ts = m['timestamp']
-        # first update in sequence, save full order book snapshot in different table
-        if seq == 0:
-            u = {'ts': ts, 'bids':m['bids'], 'asks': m['asks'], 'exchange': exchange}
-            session.execute(full_base_query, u)
+        If the message is not from the exchange of `book`, do nothing.
+        '''
+        if m['exchange'] == book.exchange.id:
+            print('Got message: ', m)
+            exchange = m['exchange']
+            # book = order_books[exchange]
+            seq = seqs[exchange]
+            seqs[exchange] += 1
 
-        # don't run update because last_bids not yet available
-        else:
-            current_bids = set((x[0], x[1]) for x in m['bids'])
-            current_asks = set((x[0], x[1]) for x in m['asks'])
+            ts = m['timestamp']
+            # first update in sequence, save full order book snapshot in different table
+            if seq == 0:
+                u = {'ts': ts, 'bids':m['bids'], 'asks': m['asks'], 'exchange': exchange}
+                session.execute(full_base_query, u)
 
-            last_bids = set((x[0], x[1]) for x in book.bids.inorder())
-            last_asks = set((x[0], x[1]) for x in book.asks.inorder())
+            # don't run update because last_bids not yet available
+            else:
+                current_bids = set((x[0], x[1]) for x in m['bids'])
+                current_asks = set((x[0], x[1]) for x in m['asks'])
 
-            removed_bids = last_bids.difference(current_bids)
-            removed_asks = last_asks.difference(current_asks)
+                last_bids = set((x[0], x[1]) for x in book.bids.inorder())
+                last_asks = set((x[0], x[1]) for x in book.asks.inorder())
 
-            added_bids = current_bids.difference(last_bids)
-            added_asks = current_asks.difference(last_asks)
+                removed_bids = last_bids.difference(current_bids)
+                removed_asks = last_asks.difference(current_asks)
 
-            for bid in removed_bids:
-                u = create_diff_object(ts, seq, True, bid[0], 0.0, exchange)
-                session.execute(base_query, u)
-            for bid in added_bids:
-                u = create_diff_object(ts, seq, True, bid[0], bid[1], exchange)
-                session.execute(base_query, u)
+                added_bids = current_bids.difference(last_bids)
+                added_asks = current_asks.difference(last_asks)
 
-            for ask in removed_asks:
-                u = create_diff_object(ts, seq, False, ask[0], 0.0, exchange)
-                session.execute(base_query, u)
-            for ask in added_asks:
-                u = create_diff_object(ts, seq, False, ask[0], ask[1], exchange)
-                session.execute(base_query, u)
+                for bid in removed_bids:
+                    u = create_diff_object(ts, seq, True, bid[0], 0.0, exchange)
+                    session.execute(base_query, u)
+                for bid in added_bids:
+                    u = create_diff_object(ts, seq, True, bid[0], bid[1], exchange)
+                    session.execute(base_query, u)
 
-        book.update_full_book(m)
+                for ask in removed_asks:
+                    u = create_diff_object(ts, seq, False, ask[0], 0.0, exchange)
+                    session.execute(base_query, u)
+                for ask in added_asks:
+                    u = create_diff_object(ts, seq, False, ask[0], ask[1], exchange)
+                    session.execute(base_query, u)
+
+            book.update_full_book(m)
 
     threads = []
     for _id in order_books:
