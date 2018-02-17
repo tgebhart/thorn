@@ -101,7 +101,7 @@ class UnifiedOrderBook(BinaryTree):
             - on_message (function, optional): A function to call when a message
                 is read from the Kafka stream. Should accept a single argument
                 `m`: a json message picked up from the Kafka stream.
-             - stop_at (datetime.datetime, optional): The time at which to stop
+            - stop_at (datetime.datetime, optional): The time at which to stop
                 monitoring the full order book.
 
         Returns: None.
@@ -114,6 +114,9 @@ class UnifiedOrderBook(BinaryTree):
         self.c.subscribe([topicstr])
         running = True
         while running:
+            t = datetime.datetime.utcnow()
+            if t > stop_at:
+                running = False
             msg = self.c.poll()
             if not msg.error():
                 m = json.loads(msg.value().decode('utf-8'))

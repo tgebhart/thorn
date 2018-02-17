@@ -118,10 +118,13 @@ class UnifiedAPIManager(object):
 
         Returns: None.
         '''
-        for exchange in exchanges:
-            m = await exchange.fetch_order_book(symbol)
+
+        async def wait_append_produce(symbol, exchange):
+            m = await  exchange.fetch_order_book(symbol)
             m['exchange'] = exchange.id
             self.p.produce(symbol.replace('/', '_')+self.stream_suffixes['fetchOrderBook'], json.dumps(m))
+
+        await asyncio.wait([wait_append_produce(symbol, exchange) for exchange in exchanges])
 
     async def manage_fetch_ticker(self, symbol, exchanges, params={}):
         '''Primary method for managing function `fetchTicker`. Awaits for a
@@ -141,7 +144,10 @@ class UnifiedAPIManager(object):
 
         Returns: None.
         '''
-        for exchange in exchanges:
+
+        async def wait_append_produce(symbol, exchange):
             m = await exchange.fetch_ticker(symbol)
             m['exchange'] = exchange.id
             self.p.produce(symbol.replace('/', '_')+self.stream_suffixes['fetchTicker'], json.dumps(m))
+
+        await asyncio.wait([wait_append_produce(symbol, exchange) for exchange in exchanges])

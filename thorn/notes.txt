@@ -3,3 +3,25 @@ Things to change on each broker after running Confluent Kafka on new VPC:
   - change auto.topic.creation (or whatever) to true
   - stop server (sudo ./bin/kafka-server-stop)
   - start server (sudo ./bin/kafka-server-start etc/kafka/server.properties &)
+
+
+Create update table:
+
+CREATE TABLE <pair_with_underscore>_second_updates(
+ ts timestamp PRIMARY KEY,
+ seq int,
+ is_trade Boolean,
+ is_bid Boolean,
+ price double,
+ quantity double,
+ exchange text
+)
+
+Create snapshot table:
+
+CREATE TABLE <pair_with_underscore>_order_book_snapshots(
+ ts timestamp PRIMARY KEY,
+ bids frozen list<list<decimal>>,
+ asks frozen list<list<decimal>>,
+ exchange text
+)
