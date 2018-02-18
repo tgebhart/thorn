@@ -1,5 +1,5 @@
 KAFKA = {
-    'consumer_config' : {'bootstrap.servers': '0', 'group.id': 'mygroup',
+    'consumer_config' : {'bootstrap.servers': '0',
                   'default.topic.config': {'auto.offset.reset': 'smallest'}}
 }
 

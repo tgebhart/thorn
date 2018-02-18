@@ -34,10 +34,15 @@ class UnifiedOrderBook(BinaryTree):
         self.last_update_id = 0
         self.latest_event_time = None
         self.loop = asyncio.get_event_loop() if loop is None else loop
-        self.c = Consumer(global_config.KAFKA['consumer_config'])
         self.api_stream_suffixes = api_config.API_MANAGER_CONFIG['function_stream_suffixes']
         self.socket_stream_suffixes = api_config.SOCKET_MANAGER_CONFIG['function_stream_suffixes']
+        self.topicstr = self.symbol.replace('/','_') + self.api_stream_suffixes['fetchOrderBook']
         super(UnifiedOrderBook, self).__init__()
+
+    def get_consumer(self, group):
+        conf = global_config.KAFKA['consumer_config']
+        conf['group.id'] = group
+        return Consumer(**conf)
 
     async def get_full_book(self, params={}):
         '''Method that calls for the full order book at the time using the
@@ -54,7 +59,7 @@ class UnifiedOrderBook(BinaryTree):
         r = await self.exchange.fetch_order_book(self.symbol, params=params)
         self.update_full_book(r)
 
-    def update_full_book(self, m, *args):
+    def update_full_book(self, m, **kwargs):
         '''Updates the bid and ask trees along with the most recent event time
         given an API order book message.
 
@@ -89,7 +94,7 @@ class UnifiedOrderBook(BinaryTree):
                 running = False
         self.c.close()
 
-    def monitor_full_book_stream(self, on_message=None, stop_at=None, *args):
+    def monitor_full_book_stream(self, consumer_group, on_message=None, stop_at=None, **kwargs):
         '''Function that monitors Kafka streams containing full order book
         information. That is, responses of the unified API method `fetch_order_book`.
         This function uses the class consumer to read a stream dictated by
@@ -106,28 +111,28 @@ class UnifiedOrderBook(BinaryTree):
 
         Returns: None.
         '''
+        seq = 0
+        print('Monitoring for {}'.format(self.exchange.id))
         if stop_at is None:
             stop_at = datetime.datetime.utcnow() + datetime.timedelta(days=73000)
         if on_message is None:
             on_message = self.update_full_book
-        topicstr = self.symbol.replace('/','_') + self.api_stream_suffixes['fetchOrderBook']
-        self.c.subscribe([topicstr])
+        c = self.get_consumer(consumer_group)
+        c.subscribe([self.topicstr])
         running = True
         while running:
-            t = datetime.datetime.utcnow()
-            if t > stop_at:
-                running = False
-            msg = self.c.poll()
+            msg = c.poll()
             if not msg.error():
                 m = json.loads(msg.value().decode('utf-8'))
                 if 'exchange' in m and m['exchange'] == self.exchange.id:
-                    on_message(m, args)
+                    on_message(m, seq=0, **kwargs)
             elif msg.error().code() != KafkaError._PARTITION_EOF:
                 print(msg.error())
                 running = False
             if datetime.datetime.utcnow() > stop_at:
+                print('Stopping {} thread'.format(self.exchange.id))
                 running = False
-        self.c.close()
+        c.close()
 
     def update_book(self, m):
         '''Deprecated method for updating order books according to socket stream
