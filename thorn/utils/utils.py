@@ -66,3 +66,41 @@ def create_diff_object(ts, seq, is_bid, price, quantity, exchange, is_trade=Fals
     'quantity': quantity,
     'exchange': exchange
     }
+
+def get_highest_trading_fee(exchange, maker=False, taker=False, tier=None):
+    '''Computes the highest probable trading fee for an exchange. Optional
+    arguments provide better accuracy.
+
+    Args:
+        exchange (ccxt.exchange): The exchange from which fees are to be computed.
+        maker (bool, optional): If we know we will be making a new spot on the
+            market, set to true.
+        taker (bool, optional): If we know we will be taking a bid or ask already
+            on the market, set to true.
+        tier (int, optional): The tier that our quantity will fall under.
+
+    Returns:
+        float: The estimated fee.
+    '''
+    if 'fees' in exchange.has:
+        all_fees = exchange['fees']
+        if 'trading' in all_fees:
+            fees = all_fees['trading']
+            if maker:
+                if tier is not None and isinstance(tier, int):
+                    if 'tierBased' in fees and fees['tierBased']:
+                        return fees['tiers']['maker'][tier]
+            else:
+                return fees['maker']
+
+            if taker:
+                if tier is not None and isinstance(tier, int):
+                    if 'tierBased' in fees and fees['tierBased']:
+                        return fees['tiers']['taker'][tier]
+            else:
+                return fees['taker']
+
+            if 'taker' in fees:
+                return fees['taker']
+
+    return 0.001
