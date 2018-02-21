@@ -1,14 +1,18 @@
 import unittest
 import time
+import math
+import networkx as nx
+import matplotlib.pyplot as plt
 
 import ccxt.async as ccxt
 from thorn.models import ArbitrageGraph
+from thorn.models import bellman_ford, find_opportunities
 
 pairs = [
     {
     'exchange': ccxt.gemini(),
     'pair': 'ETH/BTC',
-    'price': .0873
+    'price': 0.0873
     },
     {
     'exchange': ccxt.gemini(),
@@ -20,6 +24,45 @@ pairs = [
     'pair': 'ETH/USD',
     'price': 924.99,
     'ts': 1518996767361
+    }
+]
+
+pairs2 = [
+    {
+    'exchange': ccxt.gemini(),
+    'pair': 'ETH/BTC',
+    'price': .01
+    },
+    # {
+    # 'exchange': ccxt.gemini(),
+    # 'pair': 'BTC/USD',
+    # 'price': 1.00
+    # },
+    {
+    'exchange': ccxt.gemini(),
+    'pair': 'ETH/USD',
+    'price': 1.00,
+    'ts': 1518996767361
+    },
+    {
+    'exchange': ccxt.gemini(),
+    'pair': 'LTC/USD',
+    'price': 1.00
+    },
+    # {
+    # 'exchange': ccxt.gemini(),
+    # 'pair': 'LTC/BTC',
+    # 'price': 1.00
+    # },
+    {
+    'exchange': ccxt.gemini(),
+    'pair': 'BTC/MON',
+    'price': 1.00
+    },
+    {
+    'exchange': ccxt.gemini(),
+    'pair': 'MON/LTC',
+    'price': 1.00
     }
 ]
 
@@ -40,55 +83,56 @@ class ArbitrageGraphTest(unittest.TestCase):
         assert len(digraph) == 2*len(pairs)
 
         digraph.remove_node('BTC_gemini')
-        assert len(digraph) == 4
-        #
-        # digraph.add_arc(8, 7, 20.0)
-        # assert digraph.has_arc(8, 7)
-        # assert 20.0 == digraph.get_arc_weight(8, 7)
-        # assert digraph.number_of_arcs() == 1
-        #
-        # digraph.add_arc(9, 8, 10.0)
-        # assert digraph.number_of_arcs() == 2
-        # assert digraph.get_arc_weight(9, 8) == 10.0
-        # assert digraph.has_arc(9, 8)
-        # assert not digraph.has_arc(8, 9)
-        # digraph.remove_node(8)
-        # assert not digraph.has_arc(9, 8)
-        # assert digraph.number_of_arcs() == 0
-        #
-        # digraph.remove_node(5)
-        # assert len(digraph) == 8
-        #
-        # digraph.add_arc(0, 3, 1.0)
-        # digraph.add_arc(1, 3, 2.0)
-        # digraph.add_arc(3, 6, 3.0)
-        # digraph.add_arc(3, 7, 4.0)
-        #
-        # assert digraph.number_of_arcs() == 4
-        #
-        # assert 0 in digraph.get_parents_of(3)
-        # assert 1 in digraph.get_parents_of(3)
-        # assert 6 in digraph.get_children_of(3)
-        # assert 7 in digraph.get_children_of(3)
-        #
-        # try:
-        #     digraph.get_arc_weight(3, 100)
-        #     assert False
-        # except Exception:
-        #     pass
-        #
-        # try:
-        #     digraph.get_arc_weight(100, 3)
-        #     assert False
-        # except Exception:
-        #     pass
-        #
-        # try:
-        #     digraph.get_arc_weight(2, 3)
-        #     assert False
-        # except Exception:
-        #     pass
+        assert len(digraph) == 2
 
+        digraph.add_pair(pairs[1])
+        assert digraph.has_edge('BTC_gemini', 'USD_gemini')
+        assert digraph.has_edge('USD_gemini', 'BTC_gemini')
+        digraph.add_pair(pairs[0])
+        digraph.print_edges()
+        digraph.print_nodes()
+        assert len(digraph) == 2*len(pairs)
+        print('BTC --> USD: {}'.format(digraph.get_edge_price('BTC_gemini', 'USD_gemini')))
+        print('USD --> BTC: {}'.format(digraph.get_edge_price('USD_gemini', 'BTC_gemini')))
+        print(1/digraph.get_edge_price('USD_gemini', 'ETH_gemini'), digraph.get_edge_price('ETH_gemini', 'USD_gemini'))
+        assert len(digraph) == 6
+
+        digraph.add_pair(pairs[0])
+        assert len(digraph) == 6
+
+
+    def test_bellman_ford(self):
+
+        digraph = ArbitrageGraph(pairs=pairs2)
+        assert len(digraph) == 2*len(pairs2)
+
+        paths = []
+        paths = find_opportunities(digraph)
+
+        for path in paths:
+            if path == None:
+                print('No opportunity found')
+            else:
+                print("\n")
+                money = 1
+                print("Starting with %(money)i in %(currency)s" % {"money":money,"currency":path[0]})
+                for i, value in enumerate(path):
+                    if i+1 < len(path):
+                        start = path[i]
+                        end = path[i+1]
+                        rate = digraph.get_edge_price(start, end)
+                        money = money*rate
+                        print("%(start)s --> %(end)s @ %(rate)f = %(money)f" % {"start":start,"end":end,"rate":rate,"money":money})
+
+        G = digraph.as_networkx(real=False)
+
+        pos = nx.circular_layout(G)
+        nx.draw_networkx_nodes(G, pos, cmap=plt.get_cmap('jet'), node_size = 500)
+        labels = nx.get_edge_attributes(G,'weight')
+        nx.draw_networkx_edge_labels(G,pos,edge_labels=labels)
+        nx.draw_networkx_labels(G, pos)
+        nx.draw_networkx_edges(G, pos, arrows=True)
+        plt.show()
 
 
 if __name__ == '__main__':

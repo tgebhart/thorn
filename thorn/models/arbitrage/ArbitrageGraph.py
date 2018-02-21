@@ -3,23 +3,15 @@ import datetime
 import os
 import json
 import math
+import networkx as nx
 
 import asyncio
 import ccxt.async as ccxt
 
-from thorn.utils import get_highest_trading_fee
+import numpy as np
+np.seterr(all='raise', divide='raise', over='raise', under='raise', invalid='raise')
 
-# class ArbitrageNode(object):
-#
-#     def __init__(self, base, quote, exchange_name, price, inv_price=None):
-#         self.exchange_name = exchange_name
-#         self.base = base
-#         self.quote = quote
-#         self.price = float(price)
-#         self.inv_price = 1.0/price if inv_price is None else inv_price
-#         if self.price != self.inv_price:
-#             print('PAIR PRICE MISMATCH: {} --> {}: {} vs {} --> {}: {}'.format(
-#                 self.base, self.quote, self.price, self.quote, self.base, self.inv_price))
+from thorn.utils import get_highest_trading_fee
 
 class ArbitrageNode(object):
 
@@ -27,6 +19,20 @@ class ArbitrageNode(object):
         self.currency = str(currency)
         self.exchange_name = str(exchange_name)
         self.id = self.currency + '_' + self.exchange_name
+
+    def __eq__(self, other):
+        if type(other) == type(self):
+            return self.currency == other.currency and self.exchange_name == other.exchange_name
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def __repr__(self):
+        return self.id
 
 class DiArbitrageEdge(object):
     '''Directed edge for Arbitrage Graph.
@@ -37,6 +43,20 @@ class DiArbitrageEdge(object):
         self.price = price
         self.ts = ts
         self.id = self.start_node.id + '_' + self.end_node.id
+
+    def __eq__(self, other):
+        if type(other) == type(self):
+            return self.id == other.id and self.price == other.price
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def __repr__(self):
+        return "{} --> {}: {}".format(self.start_node.id, self.end_node.id, self.price)
 
 
 class ArbitrageGraph(object):
@@ -89,10 +109,12 @@ class ArbitrageGraph(object):
         q = ArbitrageNode(p['quote'], p['exchange_name'])
         self.add_node(b)
         self.add_node(q)
+        fee = get_highest_trading_fee(p['exchange'])
+        fee = 0
         # add forward exchange rate
-        self.add_edge(b, q, p['price'], p['exchange'], ts=p['ts'])
+        self.add_edge(b, q, p['price']*(1.0+fee), p['exchange'], ts=p['ts'])
         # add reverse exchange rate
-        self.add_edge(q, b, 1/p['price'], p['exchange'], ts=p['ts'])
+        self.add_edge(q, b, (1.0/p['price'])*(1.0+fee), p['exchange'], ts=p['ts'])
 
     def add_node(self, node):
         if node in self.nodes:
@@ -108,10 +130,12 @@ class ArbitrageGraph(object):
         if end_node not in self.nodes:
             self.add_node(end_node)
 
-        fee = get_highest_trading_fee(exchange)
-        new_price = math.log(price*(1+fee))
+        new_price = -np.log(price)
 
         e = DiArbitrageEdge(start_node, end_node, new_price, ts=ts)
+        if e.id in self.edge_map:
+            print('edge already in edge map', e.id)
+            return None
         self.children[start_node][end_node] = e
         self.parents[end_node][start_node] = e
         self.edges.add(e)
@@ -123,36 +147,51 @@ class ArbitrageGraph(object):
         q = ArbitrageNode(p['quote'], p['exchange_name'])
 
         try:
-            head = self.node_map[b.id]
-            tail = self.node_map[q.id]
+            tail = self.node_map[b.id]
+            head = self.node_map[q.id]
         except KeyError:
             print('pair not in graph')
             return None
 
-        if self.has_edge(head, tail):
+        if self.has_edge(tail, head) and self.has_edge(head, tail):
 
             fee = get_highest_trading_fee(p['exchange'])
-            new_price = math.log(p['price']*(1+fee))
+            fee=0
 
-            self.children[head][tail].price = new_price
-            self.children[head][tail].ts = p['ts']
-            self.children[tail][head].price = 1.0/new_price
+            new_price = -np.log(p['price']*(1.0+fee))
+            new_price_rev = -np.log((1.0/p['price'])*(1.0+fee))
+
+            self.children[tail][head].price = new_price
             self.children[tail][head].ts = p['ts']
+            self.children[head][tail].price = new_price_rev
+            self.children[head][tail].ts = p['ts']
+
+    def get_node(self, name):
+        return self.node_map.get(name)
 
     def has_edge(self, tail, head):
+        if isinstance(tail, str):
+            tail = self.node_map[tail]
+        if isinstance(head, str):
+            head = self.node_map[head]
         return tail in self.nodes and head in self.children[tail]
 
-    def get_edge_weight(self, tail, head):
+    def get_edge(self, tail, head):
+        if isinstance(tail, str):
+            tail = self.node_map[tail]
+        if isinstance(head, str):
+            head = self.node_map[head]
         if tail not in self.nodes:
             raise ValueError("The tail node is not present in this digraph.")
-
         if head not in self.nodes:
             raise ValueError("The head node is not present in this digraph.")
-
         if head not in self.children[tail].keys():
             raise ValueError("The edge ({}, {}) is not in this digraph.".format(tail, head))
 
         return self.children[tail][head]
+
+    def get_edge_price(self, tail, head):
+        return np.exp(-1.0*self.get_edge(tail, head).price)
 
     def remove_edge(self, tail, head):
         '''Removes the directed arc from `tail` to `head`.'''
@@ -180,15 +219,18 @@ class ArbitrageGraph(object):
             node = self.node_map[node]
 
         if node not in self.nodes:
+            print('node not in node list')
             return None
 
         # Unlink children:
         for child in self.children[node]:
+            del self.edge_map[self.parents[child][node].id]
             self.edges.remove(self.parents[child][node])
             del self.parents[child][node]
 
         # Unlink parents:
         for parent in self.parents[node]:
+            del self.edge_map[self.children[parent][node].id]
             self.edges.remove(self.children[parent][node])
             del self.children[parent][node]
 
@@ -209,72 +251,70 @@ class ArbitrageGraph(object):
             return []
         return list(self.children[node].keys())
 
-    # Step 1: For each node prepare the destination and predecessor
-    def initialize(graph, source):
-        d = {} # Stands for destination
-        p = {} # Stands for predecessor
-        for node in graph:
-            d[node] = float('Inf') # We start admiting that the rest of nodes are very very far
-            p[node] = None
-        d[source] = 0 # For the source we know how to reach
-        return d, p
+    def print_edges(self):
+        print(list(map(lambda x: x.id, self.edges)))
+
+    def print_nodes(self):
+        print(list(map(lambda x: x.id, self.nodes)))
+
+    def as_networkx(self, real=True):
+        G = nx.DiGraph()
+        if real:
+            for edge in self.edges:
+                G.add_edge(edge.start_node.id, edge.end_node.id, weight=self.get_edge_price(edge.start_node, edge.end_node))
+        else:
+            for edge in self.edges:
+                G.add_edge(edge.start_node.id, edge.end_node.id, weight=edge.price)
+        return G
+# Step 1: For each node prepare the destination and predecessor
+def initialize(graph, source):
+	d = {} # Stands for destination
+	p = {} # Stands for predecessor
+	for node in graph.nodes:
+		d[node] = float('Inf') # We start admiting that the rest of nodes are very very far
+		p[node] = None
+	d[source] = 0 # For the source we know how to reach
+	return d, p
 
 def relax(node, neighbour, graph, d, p):
     # If the distance between the node and the neighbour is lower than the one I have now
-    if d[neighbour] > d[node] + graph[node][neighbour]:
-        # Record this lower distance
-        d[neighbour]  = d[node] + graph[node][neighbour]
+    if d[neighbour] > d[node] + graph.get_edge(node, neighbour).price:
+        d[neighbour] = d[node] + graph.get_edge(node,neighbour).price
         p[neighbour] = node
 
-def retrace_negative_loop(p, start):
-	arbitrageLoop = [start]
-	next_node = start
-	while True:
-		next_node = p[next_node]
-		if next_node not in arbitrageLoop:
-			arbitrageLoop.append(next_node)
-		else:
-			arbitrageLoop.append(next_node)
-			arbitrageLoop = arbitrageLoop[arbitrageLoop.index(next_node):]
-			return arbitrageLoop
+def retrace_negative_loop(p,start):
+    arbitrageLoop = [start]
+    next_node = start
+    while True and next_node is not None:
+        next_node = p[next_node]
+        if next_node not in arbitrageLoop:
+            arbitrageLoop.append(next_node)
+        else:
+            arbitrageLoop.append(next_node)
+            arbitrageLoop = arbitrageLoop[arbitrageLoop.index(next_node):]
+            arbitrageLoop.reverse()
+            return arbitrageLoop
 
 
 def bellman_ford(graph, source):
-    d, p = initialize(graph, source)
-    for i in range(len(graph)-1): #Run this until is converges
-        for u in graph:
-            for v in graph[u]: #For each neighbour of u
-                relax(u, v, graph, d, p) #Lets relax it
+    if isinstance(source, str):
+        source = graph.node_map[source]
+    d,p = initialize(graph, source)
+    for i in range(len(graph.nodes)+len(graph.nodes)//2):
+        for u in graph.nodes:
+            for v in graph.get_children(u):
+                relax(u, v, graph, d, p)
 
-
-    # Step 3: check for negative-weight cycles
-    for u in graph:
-        for v in graph[u]:
-        	if d[v] < d[u] + graph[u][v]:
-        		return(retrace_negative_loop(p, source))
+    for u in graph.nodes:
+        for v in graph.get_children(u):
+            if d[v] > d[u] + graph.get_edge(u,v).price:
+                return retrace_negative_loop(p,source)
     return None
-#
-# paths = []
-#
-# graph = download()
-#
-# for key in graph:
-# 	path = bellman_ford(graph, key)
-# 	if path not in paths and not None:
-# 		paths.append(path)
-#
-# for path in paths:
-# 	if path == None:
-# 		print("No opportunity here :(")
-# 	else:
-# 		money = 100
-# 		print "Starting with %(money)i in %(currency)s" % {"money":money,"currency":path[0]}
-#
-# 		for i,value in enumerate(path):
-# 			if i+1 < len(path):
-# 				start = path[i]
-# 				end = path[i+1]
-# 				rate = math.exp(-graph[start][end])
-# 				money *= rate
-# 				print "%(start)s to %(end)s at %(rate)f = %(money)f" % {"start":start,"end":end,"rate":rate,"money":money}
-# 	print "\n"
+
+def find_opportunities(graph):
+    paths = []
+    for node in graph.nodes:
+        path = bellman_ford(graph, node)
+        if path not in paths and path is not None:
+            paths.append(path)
+    return paths
