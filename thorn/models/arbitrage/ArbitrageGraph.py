@@ -295,7 +295,6 @@ def retrace_negative_loop(p,start):
             arbitrageLoop.reverse()
             return arbitrageLoop
 
-
 def bellman_ford(graph, source):
     if isinstance(source, str):
         source = graph.node_map[source]
