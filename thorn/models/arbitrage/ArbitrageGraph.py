@@ -14,7 +14,18 @@ np.seterr(all='raise', divide='raise', over='raise', under='raise', invalid='rai
 from thorn.utils import get_highest_trading_fee
 
 class ArbitrageNode(object):
+    '''Node object used by the ArbitrageGraph. A node is defined by a currency and
+    the exchange the currency is from. The initialization method creates an id
+    for the node by concatenating the currency and the exchange name. This id is
+    then used to override the equals, not equals, hash, and represenation methods.
 
+    Args:
+        currency (str): The currency represented by the node. Ex: BTC
+        exchange_name (str): The exchange on which the currency is traded. Ex: gemini
+
+    Returns:
+        ArbitrageNode: An instance of the ArbitrageNode class.
+    '''
     def __init__(self, currency, exchange_name):
         self.currency = str(currency)
         self.exchange_name = str(exchange_name)
@@ -35,7 +46,23 @@ class ArbitrageNode(object):
         return self.id
 
 class DiArbitrageEdge(object):
-    '''Directed edge for Arbitrage Graph.
+    '''Directed edge representation for Arbitrage Graph. The object takes a
+    start node, an end node, and a price. The direction of the edge is from start
+    to end node and the weight on the edge is represented by the price. The
+    initialization method records these data (plus the optioinal timestamp) and
+    creates an id for the edge by concatenating the id of the start node with
+    the id of the end node. This id is used to override the equals, not equals,
+    hash, and representations methods.
+
+    Args:
+        start_node (ArbitrageNode): The node from which the directed edge originates.
+        end_node (ArbitrageNode): The node at which the edge ends.
+        price (float): The price (edge weight) associated with the edge. This
+            is intended to represent the exchange rate either with or without fees.
+        ts (int, optional): Timestamp at which the price was added or updated.
+
+    Returns:
+        DiArbitrageEdge: A DiArbitrageEdge instance.
     '''
     def __init__(self, start_node, end_node, price, ts=None):
         self.start_node = start_node
@@ -60,6 +87,25 @@ class DiArbitrageEdge(object):
 
 
 class ArbitrageGraph(object):
+    '''A graphical representation of a currency market. The nodes of this graph
+    (of class ArbitrageNode) represent specific currencies. Connections between
+    nodes (of class DiArbitrageEdge) represent the conversion rate between
+    currencies. This representation may be used to efficiently search for arbitrage
+    opportunities.
+
+    The ArbitrageGraph class tracks every node and edge added with a `set` data
+    structure. It tracks a map of edges and nodes that map strings of ids to the
+    associated ArbitrageNode or DiArbitrageEdge instances. The graph connections
+    themselves are tracked through a parent and children dictionary by the class.
+
+    The graph takes dictionary representations of pair price updates that list
+    the exchange object, the pair, and the price (exchange rate) of the currency
+    pair. This is then parsed and added (via `parse_pair` and `add_pair` methods)
+    to the graph in its graphical representation.
+
+    Args:
+        pairs (list[dict], optional): A list of pair price dictionaries.
+    '''
 
     def __init__(self, pairs=[]):
         '''
@@ -87,6 +133,29 @@ class ArbitrageGraph(object):
         return len(self.edges)
 
     def parse_pair(self, p):
+        '''Takes a pair object (shown below) and parses into a dictionary format
+        used by following class methods.
+
+        ```
+        pair = {
+            'exchange':ccxt.gemini(),
+            'pair': 'ETH/BTC',
+            'price': 0.001
+        }
+        ```
+
+        Args:
+            p (dict): Pair object containing an instantiated exchange, a string
+                representing the pair ("Curr1/Curr2") and a float price.
+
+        Raises:
+            KeyError: Will raise a KeyError exception if pair is invalid or incorrectly
+                formatted.
+
+        Returns:
+            dict: An expanded dictionary representation containing information
+                necessary for the graphical representation of the pair update.
+        '''
         ret = {}
         try:
             pair = p['pair']
@@ -103,14 +172,30 @@ class ArbitrageGraph(object):
             raise KeyError('Invalid `pair` format')
         return ret
 
-    def add_pair(self, pair):
+    def add_pair(self, pair, fee=None):
+        '''Adds a pair price update object (dict) to the graph. This method also
+        adds trading fees to the price according to `get_highest_trading_fee`.
+        The prices on the edges are also computed here wherein the base currency
+        (the numerator of "Curr/Curr2" pair) is the source of the edge which
+        inherits the `price`.
+
+        Args:
+            pair (dict): Pair object containing an instantiated exchange, a string
+                representing the pair ("Curr1/Curr2") and a float price. See
+                `parse_pair` for an example of the dict structure.
+            fee (float, optional): The trading fee for the exchange rate. This
+                will default to whatever is returned by `get_highest_trading_fee`
+                if not specified.
+
+        Returns:
+            None
+        '''
         p = self.parse_pair(pair)
         b = ArbitrageNode(p['base'], p['exchange_name'])
         q = ArbitrageNode(p['quote'], p['exchange_name'])
         self.add_node(b)
         self.add_node(q)
-        fee = get_highest_trading_fee(p['exchange'])
-        fee = 0
+        fee = get_highest_trading_fee(p['exchange']) if fee is None else fee
         # add forward exchange rate
         self.add_edge(b, q, p['price']*(1.0+fee), p['exchange'], ts=p['ts'])
         # add reverse exchange rate
@@ -296,6 +381,28 @@ def retrace_negative_loop(p,start):
             return arbitrageLoop
 
 def bellman_ford(graph, source):
+    '''A python implementation of the Bellman-Ford algorithm. The algorithm
+    looks for shortest paths. Unlike Djikstra, the algorithm allows for negative
+    edge weights. This allowance provides the opportunity for negative cycle
+    detection. This negative cycle detection is useful for determining arbitrage
+    opportunities in a graph of currencies.
+
+    The algorithm requires a ArbitrageGraph object and a ArbitrageNode or the
+    string representing that node's id (ex: "BTC_gemini") as the source. The
+    algorithm then searches for negative cycles and returns the paths that create
+    these negative cycles.
+
+    Args:
+        graph (ArbitrageGraph): The instantiated ArbitrageGraph over which negative
+            cycles are sought.
+        source (ArbitrageNode or str): An ArbitrageNode object or the string id
+            of such a node. This is the source from which we search for shortest
+            paths and, consequently, negative edge cycles.
+            
+    Returns:
+        list[ArbitrageNode]: If the algorithm finds a negative cycle, it returns
+            a list of the nodes that represent this cycle. Otherwise, return None.
+    '''
     if isinstance(source, str):
         source = graph.node_map[source]
     d,p = initialize(graph, source)
@@ -311,6 +418,17 @@ def bellman_ford(graph, source):
     return None
 
 def find_opportunities(graph):
+    '''Given an ArbitrageGraph object, this function runs all-pairs Bellman-Ford
+    to search for arbitrage opportunities. The opportunities are represented as
+    paths that cycle from source node back to source node.
+
+    Args:
+        graph (ArbitrageGraph): The currency graph upon which to search for opportunities.
+
+    Returns:
+        list: A list of paths represented by the node IDs and the price between
+            them.
+    '''
     paths = []
     for node in graph.nodes:
         path = bellman_ford(graph, node)
