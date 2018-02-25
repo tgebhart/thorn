@@ -105,9 +105,11 @@ class ArbitrageGraph(object):
 
     Args:
         pairs (list[dict], optional): A list of pair price dictionaries.
+        fees (list[float], optional): An optional list of fees accompanying each
+            pair.
     '''
 
-    def __init__(self, pairs=[]):
+    def __init__(self, pairs=[], fees=[]):
         '''
         Expected format for `pairs`:
         [
@@ -125,9 +127,12 @@ class ArbitrageGraph(object):
         self.parents = {}
         self.edges = set()
         self.edge_map = {}
-        if len(pairs) > 0:
+        if len(pairs) > 0 and len(fees) == len(pairs):
+            for i in range(len(pairs)):
+                self.add_pair(pairs[i], fee=fees[i])
+        else:
             for p in pairs:
-                self.add_pair(p)
+                self.add_pair(p, fee=None)
 
     def __len__(self):
         return len(self.edges)
@@ -226,7 +231,7 @@ class ArbitrageGraph(object):
         self.edges.add(e)
         self.edge_map[e.id] = e
 
-    def update_pair(self, pair):
+    def update_pair(self, pair, fee=None):
         p = self.parse_pair()
         b = ArbitrageNode(p['base'], p['exchange_name'])
         q = ArbitrageNode(p['quote'], p['exchange_name'])
@@ -240,8 +245,7 @@ class ArbitrageGraph(object):
 
         if self.has_edge(tail, head) and self.has_edge(head, tail):
 
-            fee = get_highest_trading_fee(p['exchange'])
-            fee=0
+            fee = get_highest_trading_fee(p['exchange']) if fee is None else fee
 
             new_price = -np.log(p['price']*(1.0+fee))
             new_price_rev = -np.log((1.0/p['price'])*(1.0+fee))
@@ -363,7 +367,8 @@ def initialize(graph, source):
 
 def relax(node, neighbour, graph, d, p):
     # If the distance between the node and the neighbour is lower than the one I have now
-    if d[neighbour] > d[node] + graph.get_edge(node, neighbour).price:
+    comp = d[node] + graph.get_edge(node, neighbour).price
+    if d[neighbour] > comp and not np.isclose(d[neighbour], comp):
         d[neighbour] = d[node] + graph.get_edge(node,neighbour).price
         p[neighbour] = node
 
@@ -380,7 +385,7 @@ def retrace_negative_loop(p,start):
             arbitrageLoop.reverse()
             return arbitrageLoop
 
-def bellman_ford(graph, source):
+def bellman_ford(graph, source, eps=1e-4):
     '''A python implementation of the Bellman-Ford algorithm. The algorithm
     looks for shortest paths. Unlike Djikstra, the algorithm allows for negative
     edge weights. This allowance provides the opportunity for negative cycle
@@ -398,7 +403,9 @@ def bellman_ford(graph, source):
         source (ArbitrageNode or str): An ArbitrageNode object or the string id
             of such a node. This is the source from which we search for shortest
             paths and, consequently, negative edge cycles.
-            
+        eps (float, optional): An epsilon tolerance on the detection of a negative
+            cycle.
+
     Returns:
         list[ArbitrageNode]: If the algorithm finds a negative cycle, it returns
             a list of the nodes that represent this cycle. Otherwise, return None.
@@ -406,18 +413,19 @@ def bellman_ford(graph, source):
     if isinstance(source, str):
         source = graph.node_map[source]
     d,p = initialize(graph, source)
-    for i in range(len(graph.nodes)+len(graph.nodes)//2):
+    for i in range(len(graph.nodes)-1):
         for u in graph.nodes:
             for v in graph.get_children(u):
                 relax(u, v, graph, d, p)
 
     for u in graph.nodes:
         for v in graph.get_children(u):
-            if d[v] > d[u] + graph.get_edge(u,v).price:
+            comp = d[u] + graph.get_edge(u,v).price
+            if d[v] > comp:
                 return retrace_negative_loop(p,source)
     return None
 
-def find_opportunities(graph):
+def find_opportunities(graph, eps=1e-6):
     '''Given an ArbitrageGraph object, this function runs all-pairs Bellman-Ford
     to search for arbitrage opportunities. The opportunities are represented as
     paths that cycle from source node back to source node.
@@ -431,7 +439,7 @@ def find_opportunities(graph):
     '''
     paths = []
     for node in graph.nodes:
-        path = bellman_ford(graph, node)
+        path = bellman_ford(graph, node, eps=eps)
         if path not in paths and path is not None:
             paths.append(path)
     return paths
