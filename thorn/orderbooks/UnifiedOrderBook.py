@@ -8,12 +8,13 @@ from thorn.api import config as api_config
 from thorn import config as global_config
 from thorn.utils import Printer
 from thorn.utils import BinaryTree
+from thorn.utils import reformat_pair
 
 class UnifiedOrderBook(BinaryTree):
 
-    def __init__(self, symbol, exchange, loop=None):
+    def __init__(self, pair, exchange, loop=None):
         '''Initialization method for the `UnifiedOrderBook` class. The class
-        tracks a symbol, exchange, bids, asks, update id, event times, an asyncio
+        tracks a pair, exchange, bids, asks, update id, event times, an asyncio
         loop, a Kafka consumer class, and a few other helper attributes. The bids
         and asks are stored in their own binary trees. The class implements only
         the ccxt unified API functions related to order book tracking. This allows
@@ -21,13 +22,13 @@ class UnifiedOrderBook(BinaryTree):
         unified API exchange methods.
 
         Args:
-            - symbol (str): The symbol that the order book tracks.
+            - pair (str): The pair that the order book tracks.
             - exchange (ccxt.exchange): The instantiated exchange tied to the order book.
             - loop (asyncio.event_loop): An Asyncio event loop to be used for the Order Book.
 
         Returns: None.
         '''
-        self.symbol = symbol
+        self.pair = pair
         self.exchange = exchange
         self.bids = BinaryTree()
         self.asks = BinaryTree()
@@ -36,7 +37,7 @@ class UnifiedOrderBook(BinaryTree):
         self.loop = asyncio.get_event_loop() if loop is None else loop
         self.api_stream_suffixes = api_config.API_MANAGER_CONFIG['function_stream_suffixes']
         self.socket_stream_suffixes = api_config.SOCKET_MANAGER_CONFIG['function_stream_suffixes']
-        self.topicstr = self.symbol.replace('/','_') + self.api_stream_suffixes['fetchOrderBook']
+        self.topicstr = reformat_pair(self.pair) + self.api_stream_suffixes['fetchOrderBook']
         super(UnifiedOrderBook, self).__init__()
 
     def get_consumer(self, group):
@@ -56,7 +57,7 @@ class UnifiedOrderBook(BinaryTree):
 
         Returns: None.
         '''
-        r = await self.exchange.fetch_order_book(self.symbol, params=params)
+        r = await self.exchange.fetch_order_book(self.pair, params=params)
         self.update_full_book(r)
 
     def update_full_book(self, m, **kwargs):
@@ -80,7 +81,7 @@ class UnifiedOrderBook(BinaryTree):
     def monitor_updates(self):
         '''Deprecated method for monitoring socket streams.
         '''
-        topicstr = self.symbol.replace('/', '_') + self.socket_stream_suffixes['orderBookUpdate']
+        topicstr = reformat_pair(self.pair) + self.socket_stream_suffixes['orderBookUpdate']
         self.c.subscribe([topicstr])
         running = True
         while running:
@@ -125,7 +126,8 @@ class UnifiedOrderBook(BinaryTree):
             if not msg.error():
                 m = json.loads(msg.value().decode('utf-8'))
                 if 'exchange' in m and m['exchange'] == self.exchange.id:
-                    on_message(m, seq=0, **kwargs)
+                    on_message(m, seq=seq, **kwargs)
+                    seq += 1
             elif msg.error().code() != KafkaError._PARTITION_EOF:
                 print(msg.error())
                 running = False

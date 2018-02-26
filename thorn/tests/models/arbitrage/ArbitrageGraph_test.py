@@ -76,40 +76,39 @@ class ArbitrageGraphTest(unittest.TestCase):
     def tearDown(self):
         pass
 
-    # def test_basics(self):
-    #     digraph = ArbitrageGraph()
-    #     assert len(digraph) == 0
-    #
-    #     digraph = ArbitrageGraph(pairs=pairs)
-    #     assert len(digraph) == 2*len(pairs)
-    #
-    #     digraph.remove_node('BTC_gemini')
-    #     assert len(digraph) == 2
-    #
-    #     digraph.add_pair(pairs[1])
-    #     assert digraph.has_edge('BTC_gemini', 'USD_gemini')
-    #     assert digraph.has_edge('USD_gemini', 'BTC_gemini')
-    #     digraph.add_pair(pairs[0])
-    #     digraph.print_edges()
-    #     digraph.print_nodes()
-    #     assert len(digraph) == 2*len(pairs)
-    #     print('BTC --> USD: {}'.format(digraph.get_edge_price('BTC_gemini', 'USD_gemini')))
-    #     print('USD --> BTC: {}'.format(digraph.get_edge_price('USD_gemini', 'BTC_gemini')))
-    #     print(1/digraph.get_edge_price('USD_gemini', 'ETH_gemini'), digraph.get_edge_price('ETH_gemini', 'USD_gemini'))
-    #     assert len(digraph) == 6
-    #
-    #     digraph.add_pair(pairs[0])
-    #     assert len(digraph) == 6
+    def test_basics(self):
+        digraph = ArbitrageGraph()
+        assert len(digraph) == 0
+
+        digraph = ArbitrageGraph(pairs=pairs)
+        assert len(digraph) == 2*len(pairs)
+
+        digraph.remove_node('BTC_gemini')
+        assert len(digraph) == 2
+
+        digraph.add_pair(pairs[1])
+        assert digraph.has_edge('BTC_gemini', 'USD_gemini')
+        assert digraph.has_edge('USD_gemini', 'BTC_gemini')
+        digraph.add_pair(pairs[0])
+        digraph.print_edges()
+        digraph.print_nodes()
+        assert len(digraph) == 2*len(pairs)
+        print('BTC --> USD: {}'.format(digraph.get_edge_price('BTC_gemini', 'USD_gemini')))
+        print('USD --> BTC: {}'.format(digraph.get_edge_price('USD_gemini', 'BTC_gemini')))
+        print(1/digraph.get_edge_price('USD_gemini', 'ETH_gemini'), digraph.get_edge_price('ETH_gemini', 'USD_gemini'))
+        assert len(digraph) == 6
+
+        digraph.add_pair(pairs[0])
+        assert len(digraph) == 6
 
 
     def test_bellman_ford(self):
 
         digraph = ArbitrageGraph(pairs=pairs2, fees=np.zeros(shape=len(pairs2)))
-        # assert len(digraph) == 2*len(pairs2)
+        assert len(digraph) == 2*len(pairs2)
 
         paths = []
         paths = find_opportunities(digraph)
-        print(paths)
 
         for path in paths:
             if path == None:
@@ -134,7 +133,7 @@ class ArbitrageGraphTest(unittest.TestCase):
         nx.draw_networkx_edge_labels(G,pos,edge_labels=labels)
         nx.draw_networkx_labels(G, pos)
         nx.draw_networkx_edges(G, pos, arrows=True)
-        # plt.show()
+        plt.show()
 
 
 if __name__ == '__main__':

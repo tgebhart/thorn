@@ -104,3 +104,15 @@ def get_highest_trading_fee(exchange, maker=False, taker=False, tier=None):
                 return fees['taker']
 
     return 0.001
+
+def reformat_pair(pair):
+    '''Reformats a pair of form "Curr1/Curr2" into a Kafka-acceptable form of
+    "Curr1_Curr2" where Curr1 is the base and Curr2 is the quote currency.
+
+    Args:
+        pair (str): The pair to reformat (expected "Base/Quote").
+
+    Returns:
+        str: The reformatted pair
+    '''
+    return symbol.replace('/','_')

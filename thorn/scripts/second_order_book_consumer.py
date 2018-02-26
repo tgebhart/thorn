@@ -30,7 +30,6 @@ def run(symbol, exchange, stop_at=None):
     cluster = Cluster(config.CASSANDRA['nodes'])
 
     book = UnifiedOrderBook(symbol, exchange)
-    seq = 0
 
     base_query = "INSERT INTO {} (ts, seq, is_trade, is_bid, price, quantity, exchange) \
                 VALUES (%(ts)s, %(seq)s, %(is_trade)s, %(is_bid)s, %(price)s, \
@@ -130,7 +129,6 @@ if __name__ == "__main__":
     multiprocessing.log_to_stderr(logging.DEBUG)
     for e in manager.exchanges:
         p = multiprocessing.Process(name=e.id, target=run, args=(symbol, e), kwargs={'stop_at':stop_at})
-        # p.daemon = True
         jobs.append(p)
         p.start()
     for p in jobs:
