@@ -6,4 +6,4 @@ import asyncio
 class UnifiedBroker(object):
 
     def __init__(self):
-        print()
+        self.order_queue = []

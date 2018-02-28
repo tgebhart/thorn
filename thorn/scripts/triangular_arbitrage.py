@@ -12,20 +12,19 @@ import ccxt.async as ccxt
 from thorn.api import UnifiedAPIManager
 from thorn.orderbooks import UnifiedOrderBook
 from thorn import config
-from thorn.utils import instantiate_exchanges, get_highest_trading_fee, reformat_pair
-from thorn.models import ArbitrageGraph
+from thorn.utils import instantiate_exchanges, get_highest_trading_fee, \
+                        reformat_pair
+from thorn.models import ArbitrageGraph, ArbitragePair, find_opportunities
+from thorn.brokers import ArbitrageBroker
 
 GROUP_SUFFIX = '_triangular'
 
 def create_pair_object(pair, exchange, price):
-    return {'exchange':exchange, 'pair':pair, 'price':price}
+    return ArbitragePair(exchange, pair, price[0], quantity=price[1])
 
 def run(pair, exchange, graph, broker, stop_at=None):
-    print('RUNNING ', pair)
 
-    book = UnifiedOrderBook(pair, exchange)
-
-    def on_message(m, **kwargs):
+    def on_message(m, seq=-1, **kwargs):
         '''Function passed to UnifiedOrderBook class that will be executed each
         time the UnifiedOrderBook reads an order book message from Kafka. If the
         message is about the exchange of the instantiated order book, this
@@ -34,9 +33,7 @@ def run(pair, exchange, graph, broker, stop_at=None):
 
         If the message is not from the exchange of `book`, do nothing.
         '''
-        print('Got message: ', m)
         ex_name = m['exchange']
-
         ts = m['timestamp']
 
         book.update_full_book(m)
@@ -47,9 +44,13 @@ def run(pair, exchange, graph, broker, stop_at=None):
             graph.add_pair(p)
         else:
             graph.update_pair(p)
-        ops = graph.find_opportunities()
+        ops = find_opportunities(graph, exchange=exchange)
+        print(ops)
         if len(ops) > 0:
             broker.handle_ops(ops)
+
+    print('RUNNING ', pair)
+    book = UnifiedOrderBook(pair, exchange)
 
     group_name = pair + '_' + exchange.id + GROUP_SUFFIX
     book.monitor_full_book_stream(group_name, on_message=on_message, stop_at=stop_at)
@@ -58,16 +59,16 @@ def run(pair, exchange, graph, broker, stop_at=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Triangular Arbitrage model')
 
-    parser.add_argument('-e', '--exchange', nargs='+', help='exchange to aggregate from (use exchange id name)', required=True)
+    parser.add_argument('-e', '--exchange', type=str, help='exchange to aggregate from (use exchange id name)', required=True)
     parser.add_argument('-a', '--all', action='store_true', help='whether to run all pairs', required=False)
-    parser.add_argument('-e', '--pairs', nargs='+', help='list of pairs to monitor', required=False)
+    parser.add_argument('-p', '--pairs', nargs='+', help='list of pairs to monitor', required=False)
     parser.add_argument('-sa', '--stopAfter', help='Stop managing after this number of ms', type=int, required=False)
 
     cores = multiprocessing.cpu_count()
     print('Number of CPU Cores: {}'.format(cores))
 
     args = parser.parse_args()
-    exchange = instantiate_exchanges([args.exchange])
+    exchange = instantiate_exchanges([args.exchange])[args.exchange]
     asyncio.get_event_loop().run_until_complete(exchange.load_markets())
     if args.all:
         print('Using as many pairs as possible')
@@ -75,18 +76,17 @@ if __name__ == "__main__":
         # dumping to Kafka.
         pairs = exchange.markets
     else:
-        symbols = args.pairs
-    else:
-        print('List of exchanges not specified, using as many ccxt-unified exchanges as possible')
+        pairs = args.pairs
     stop_at = args.stopAfter
     if stop_at is not None:
         stop_at = datetime.datetime.utcnow() + datetime.timedelta(milliseconds=stop_at)
 
     graph = ArbitrageGraph()
+    broker = ArbitrageBroker()
     jobs = []
     multiprocessing.log_to_stderr(logging.DEBUG)
     for p in pairs:
-        p = multiprocessing.Process(name=p, target=run, args=(p, exchange, graph), kwargs={'stop_at':stop_at})
+        p = multiprocessing.Process(name=p, target=run, args=(p, exchange, graph, broker), kwargs={'stop_at':stop_at})
         jobs.append(p)
         p.start()
     for p in jobs:

@@ -13,6 +13,76 @@ np.seterr(all='raise', divide='raise', over='raise', under='raise', invalid='rai
 
 from thorn.utils import get_highest_trading_fee
 
+class ArbitragePair(object):
+
+    def __init__(self, exchange, pair, price, quantity=None, ts=None):
+        self.exchange = exchange
+        self.pair = pair
+        self.quantity = quantity
+        if isinstance(price, list):
+            self.price = price[0]
+            self.quantity = price[1]
+        elif isinstance(price, float):
+            self.price = price
+        else:
+            raise AttributeError('Price not in valid format!')
+        self.ts = ts
+
+    def __eq__(self, other):
+        if type(self) == type(other):
+            if self.quantity is not None and other.quantity is not None:
+                return self.exchange.id == other.exchange.id and self.pair == other.pair and self.price == other.price and self.quantity == other.quantity
+            return self.exchange.id == other.exchange.id and self.pair == other.pair and self.price == other.price
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.pair, self.price, self.quantity, self.exchange.id)
+
+class ArbitrageOp(object):
+
+    def __init__(self, path, exchange, graph, ts=None):
+        if len(path) > 0:
+            self.op, self.gain = self.reformat_path(path, graph)
+        self.path = path
+        self.exchange = exchange
+        self.start = self.path[0].currency
+        self.ts = ts
+
+    def __len__(self):
+        return len(self.op)
+
+    def __hash__(self):
+        return hash(self.start, self.op, self.exchange.id)
+
+    def __eq__(self, other):
+        if type(self) == type(other):
+            return self.op == other.op and self.gain == other.gain
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        s = '{}: Return: {:.2f}, Cycle of length {} \n'.format(self.start, self.gain, len(self))
+        for o in self.op:
+            s += '{} --> {} @ {:.4f} \n'.format(o['from'], o['to'], o['price'])
+        return s
+
+    def reformat_path(self, path, graph):
+        ret = []
+        m = 1.0
+        for i in range(len(path)-1):
+            price = graph.get_edge_price(path[i], path[i+1])
+            m = m*price
+            p = {'from':path[i].currency,
+                'to':path[i+1].currency,
+                'price':price}
+            ret.append(p)
+        return ret, m
+
 class ArbitrageNode(object):
     '''Node object used by the ArbitrageGraph. A node is defined by a currency and
     the exchange the currency is from. The initialization method creates an id
@@ -162,20 +232,32 @@ class ArbitrageGraph(object):
                 necessary for the graphical representation of the pair update.
         '''
         ret = {}
-        try:
-            pair = p['pair']
+        if isinstance(p, ArbitragePair):
+            pair = p.pair
             ret['base'] = pair[:pair.find('/')]
             ret['quote'] = pair[pair.find('/')+1:]
-            ret['exchange'] = p['exchange']
-            ret['exchange_name'] = p['exchange'].id
-            ret['price'] = float(p['price'])
-            if 'ts' in p:
-                ret['ts'] = p['ts']
-            else:
-                ret['ts'] = None
-        except KeyError:
-            raise KeyError('Invalid `pair` format')
-        return ret
+            ret['exchange'] = p.exchange
+            ret['exchange_name'] = p.exchange.id
+            ret['price'] = float(p.price)
+            ret['ts'] = p.ts
+            return ret
+        elif isinstance(p, dict):
+            try:
+                pair = p['pair']
+                ret['base'] = pair[:pair.find('/')]
+                ret['quote'] = pair[pair.find('/')+1:]
+                ret['exchange'] = p['exchange']
+                ret['exchange_name'] = p['exchange'].id
+                ret['price'] = float(p['price'])
+                if 'ts' in p:
+                    ret['ts'] = p['ts']
+                else:
+                    ret['ts'] = None
+            except KeyError:
+                raise KeyError('Invalid `pair` format for dict object')
+            return ret
+        else:
+            raise KeyError('Could not decode pair object')
 
     def add_pair(self, pair, fee=None):
         '''Adds a pair price update object (dict) to the graph. This method also
@@ -232,7 +314,7 @@ class ArbitrageGraph(object):
         self.edge_map[e.id] = e
 
     def update_pair(self, pair, fee=None):
-        p = self.parse_pair()
+        p = self.parse_pair(pair)
         b = ArbitrageNode(p['base'], p['exchange_name'])
         q = ArbitrageNode(p['quote'], p['exchange_name'])
 
@@ -425,7 +507,7 @@ def bellman_ford(graph, source, eps=1e-4):
                 return retrace_negative_loop(p,source)
     return None
 
-def find_opportunities(graph, eps=1e-6):
+def find_opportunities(graph, exchange=None, eps=1e-6):
     '''Given an ArbitrageGraph object, this function runs all-pairs Bellman-Ford
     to search for arbitrage opportunities. The opportunities are represented as
     paths that cycle from source node back to source node.
@@ -437,9 +519,11 @@ def find_opportunities(graph, eps=1e-6):
         list: A list of paths represented by the node IDs and the price between
             them.
     '''
-    paths = []
+    ops = []
     for node in graph.nodes:
         path = bellman_ford(graph, node, eps=eps)
-        if path not in paths and path is not None:
-            paths.append(path)
-    return paths
+        if path is not None:
+            op = ArbitrageOp(path, exchange, graph)
+            if op not in ops:
+                ops.append(op)
+    return ops

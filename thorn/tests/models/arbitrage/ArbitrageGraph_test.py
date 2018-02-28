@@ -107,23 +107,14 @@ class ArbitrageGraphTest(unittest.TestCase):
         digraph = ArbitrageGraph(pairs=pairs2, fees=np.zeros(shape=len(pairs2)))
         assert len(digraph) == 2*len(pairs2)
 
-        paths = []
-        paths = find_opportunities(digraph)
+        ops = find_opportunities(digraph)
 
-        for path in paths:
-            if path == None:
+        for op in ops:
+            if op is None:
                 print('No opportunity found')
             else:
-                print("\n")
-                money = 1
-                print("Starting with %(money)i in %(currency)s" % {"money":money,"currency":path[0]})
-                for i, value in enumerate(path):
-                    if i+1 < len(path):
-                        start = path[i]
-                        end = path[i+1]
-                        rate = digraph.get_edge_price(start, end)
-                        money = money*rate
-                        print("%(start)s --> %(end)s @ %(rate)f = %(money)f" % {"start":start,"end":end,"rate":rate,"money":money})
+                print(op)
+
 
         G = digraph.as_networkx(real=True)
 

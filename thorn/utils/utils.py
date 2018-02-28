@@ -115,4 +115,4 @@ def reformat_pair(pair):
     Returns:
         str: The reformatted pair
     '''
-    return symbol.replace('/','_')
+    return pair.replace('/','_')
