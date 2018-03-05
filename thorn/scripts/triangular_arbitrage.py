@@ -41,11 +41,12 @@ def run(pair, exchange, graph, broker, stop_at=None):
         p = create_pair_object(book.pair, exchange, price)
         # first read in sequence, add pair
         if seq == 0:
-            graph.add_pair(p)
+            graph.add_pair(p, fee=0)
         else:
-            graph.update_pair(p)
+            graph.update_pair(p, fee=0)
         ops = find_opportunities(graph, exchange=exchange)
-        print(ops)
+        graph.update_draw()
+        print(ts,':', ops)
         if len(ops) > 0:
             broker.handle_ops(ops)
 
@@ -69,7 +70,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     exchange = instantiate_exchanges([args.exchange])[args.exchange]
-    asyncio.get_event_loop().run_until_complete(exchange.load_markets())
     if args.all:
         print('Using as many pairs as possible')
         # TODO: Add ability to query Cassandra for which UnifiedAPIManagers are
@@ -82,6 +82,7 @@ if __name__ == "__main__":
         stop_at = datetime.datetime.utcnow() + datetime.timedelta(milliseconds=stop_at)
 
     graph = ArbitrageGraph()
+    graph.draw()
     broker = ArbitrageBroker()
     jobs = []
     multiprocessing.log_to_stderr(logging.DEBUG)

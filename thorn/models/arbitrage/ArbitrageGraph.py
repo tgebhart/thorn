@@ -4,6 +4,7 @@ import os
 import json
 import math
 import networkx as nx
+import matplotlib.pyplot as plt
 
 import asyncio
 import ccxt.async as ccxt
@@ -14,6 +15,18 @@ np.seterr(all='raise', divide='raise', over='raise', under='raise', invalid='rai
 from thorn.utils import get_highest_trading_fee
 
 class ArbitragePair(object):
+    '''A container class for pair information used by the ArbitrageGraph algorithm.
+
+    Args:
+        exchange (ccxt.exchange): An instantiated ccxt exchange (ex: ccxt.gemini())
+            from which the pair information originated.
+        pair (str or tuple): A string representation of the pair (ex: 'ETH/BTC')
+            or a tuple where the first argument is the price and the second is
+            the quantity.
+        price (float): The price, or exchange rate, of the pair.
+        quantity (float, optional): The quantity (bid or ask) at the price level.
+        ts (int): The timestamp of the pair price information.
+    '''
 
     def __init__(self, exchange, pair, price, quantity=None, ts=None):
         self.exchange = exchange
@@ -42,6 +55,20 @@ class ArbitragePair(object):
         return hash(self.pair, self.price, self.quantity, self.exchange.id)
 
 class ArbitrageOp(object):
+    '''A container class representing an arbitrage opportunity. This is the
+    class output of the ArbitrageGraph's `find_opportunities` method.
+
+    Args:
+        path (list): The exchange path across the arbitrage graph. The first entry
+            is the starting currency, and the last entry is the starting currency.
+            The list is ordered according to the order of the nodes one must visit
+            through the graph.
+        exchange (ccxt.exchange): An instantiated exchange object at which the
+            opportunity exists.
+        graph (ArbitrageGraph): The arbitrage graph from which the opportunity
+            was derived.
+        ts (int, optional): The timestamp associated to the opportunity.
+    '''
 
     def __init__(self, path, exchange, graph, ts=None):
         if len(path) > 0:
@@ -72,6 +99,8 @@ class ArbitrageOp(object):
         return s
 
     def reformat_path(self, path, graph):
+        '''Takes opportunity in the form of `path` (a list of pairs)
+        '''
         ret = []
         m = 1.0
         for i in range(len(path)-1):
@@ -437,6 +466,30 @@ class ArbitrageGraph(object):
             for edge in self.edges:
                 G.add_edge(edge.start_node.id, edge.end_node.id, weight=edge.price)
         return G
+
+    def draw(self):
+        G = self.as_networkx(real=True)
+        pos = nx.circular_layout(G)
+        nx.draw_networkx_nodes(G, pos, cmap=plt.get_cmap('jet'), node_size = 500)
+        labels = nx.get_edge_attributes(G,'weight')
+        nx.draw_networkx_edge_labels(G,pos,edge_labels=labels)
+        nx.draw_networkx_labels(G, pos)
+        nx.draw_networkx_edges(G, pos, arrows=True)
+        plt.draw()
+        plt.ion()
+        plt.show()
+
+    def update_draw(self):
+        G = self.as_networkx(real=True)
+        pos = nx.circular_layout(G)
+        nx.draw_networkx_nodes(G, pos, cmap=plt.get_cmap('jet'), node_size = 500)
+        labels = nx.get_edge_attributes(G,'weight')
+        nx.draw_networkx_edge_labels(G,pos,edge_labels=labels)
+        nx.draw_networkx_labels(G, pos)
+        nx.draw_networkx_edges(G, pos, arrows=True)
+        plt.draw()
+        plt.pause(0.05)
+
 # Step 1: For each node prepare the destination and predecessor
 def initialize(graph, source):
 	d = {} # Stands for destination
@@ -467,7 +520,7 @@ def retrace_negative_loop(p,start):
             arbitrageLoop.reverse()
             return arbitrageLoop
 
-def bellman_ford(graph, source, eps=1e-4):
+def bellman_ford(graph, source):
     '''A python implementation of the Bellman-Ford algorithm. The algorithm
     looks for shortest paths. Unlike Djikstra, the algorithm allows for negative
     edge weights. This allowance provides the opportunity for negative cycle
@@ -485,8 +538,6 @@ def bellman_ford(graph, source, eps=1e-4):
         source (ArbitrageNode or str): An ArbitrageNode object or the string id
             of such a node. This is the source from which we search for shortest
             paths and, consequently, negative edge cycles.
-        eps (float, optional): An epsilon tolerance on the detection of a negative
-            cycle.
 
     Returns:
         list[ArbitrageNode]: If the algorithm finds a negative cycle, it returns
@@ -507,7 +558,7 @@ def bellman_ford(graph, source, eps=1e-4):
                 return retrace_negative_loop(p,source)
     return None
 
-def find_opportunities(graph, exchange=None, eps=1e-6):
+def find_opportunities(graph, exchange=None):
     '''Given an ArbitrageGraph object, this function runs all-pairs Bellman-Ford
     to search for arbitrage opportunities. The opportunities are represented as
     paths that cycle from source node back to source node.
@@ -521,8 +572,8 @@ def find_opportunities(graph, exchange=None, eps=1e-6):
     '''
     ops = []
     for node in graph.nodes:
-        path = bellman_ford(graph, node, eps=eps)
-        if path is not None:
+        path = bellman_ford(graph, node)
+        if path is not None and len(path)-1 > 2:
             op = ArbitrageOp(path, exchange, graph)
             if op not in ops:
                 ops.append(op)

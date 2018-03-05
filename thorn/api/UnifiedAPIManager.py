@@ -122,7 +122,7 @@ class UnifiedAPIManager(object):
         async def wait_append_produce(symbol, exchange):
             m = await exchange.fetch_order_book(symbol)
             m['exchange'] = exchange.id
-            print(exchange.id)
+            print(exchange.id, symbol)
             self.p.produce(symbol.replace('/', '_')+self.stream_suffixes['fetchOrderBook'], json.dumps(m))
 
         await asyncio.wait([wait_append_produce(symbol, exchange) for exchange in exchanges])

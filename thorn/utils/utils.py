@@ -20,7 +20,7 @@ def read_private_api_info(loc, name, index_col_name='exchange'):
     df = df.set_index(index_col_name)
     return df.to_dict('index')
 
-def instantiate_exchanges(exchanges):
+def instantiate_exchanges(exchanges, loop=None):
     '''Instantiates the exchanges listed in `exchanges` parameter. The parameter
     must be an iterable containing the name of the property returned by
     `exchange.id`. This function returns a dict mapping the id of the exchange
@@ -33,14 +33,16 @@ def instantiate_exchanges(exchanges):
     Returns: dict mapping exchange id to instantiated exchange object.
     '''
     ret = {}
+    loop = asyncio.get_event_loop() if loop is None else loop
     for _id in exchanges:
         exchange = getattr(ccxt, _id)
         ex = exchange()
         try:
-            asyncio.get_event_loop().run_until_complete(ex.load_markets())
+            loop.run_until_complete(ex.load_markets())
             ret[_id] = ex
         except Exception as e:
             print('EXCEPTION RAISED FOR {}:'.format(_id), e)
+    # loop.close()
     return ret
 
 def create_diff_object(ts, seq, is_bid, price, quantity, exchange, is_trade=False):
